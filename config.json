@@ -1,0 +1,194 @@
+{
+  "_comment": "Config for the persistent multi-agent scientific review layer. Advisory data read by Claude Code per PROTOCOL.md -- there is no enforcing hook for this file (unlike scientific-debug/config.json, which the PreToolUse gate actually reads). Editing this file changes guidance, not code behavior.",
+
+  "risk_levels": {
+    "R0": {
+      "name": "Routine",
+      "examples": ["formatting", "comments", "documentation", "harmless refactoring"],
+      "review_required": false,
+      "notes": "No scientific review. No review package. Proceed as normal coding."
+    },
+    "R1": {
+      "name": "Implementation",
+      "examples": ["indexing changes", "data handling", "numerical implementation detail", "ordinary bug fixes"],
+      "review_required": "conditional",
+      "notes": "Requires Code Auditor review when the change is scientifically consequential (affects results, not just code cleanliness). Author's judgment, documented in the review package's risk-classification rationale."
+    },
+    "R2": {
+      "name": "Methodological",
+      "examples": ["new estimator", "changed filtering method", "changed optimization", "changed STFT/WOLA formulation", "changed artifact-removal method"],
+      "review_required": true,
+      "reviewers": ["math_auditor_or_scientific_auditor"],
+      "notes": "Require whichever of Mathematical Auditor / Scientific Auditor is relevant to the change; both if both apply. Should normally have a corresponding scientific-debug-ledger investigation with protected_paths covering the affected code."
+    },
+    "R3": {
+      "name": "Scientific Claim",
+      "examples": ["reduces bias", "preserves neural signal", "outperforms method X", "is more robust"],
+      "review_required": true,
+      "reviewers": ["code_auditor", "math_auditor", "scientific_auditor", "red_team"],
+      "notes": "Full review including red team. Empirical portions of the claim require empirical evidence (E-xxx experiment executed by the human), not reviewer agreement."
+    },
+    "R4": {
+      "name": "Major Scientific Conclusion",
+      "examples": ["superiority claims", "novelty claims", "publication-level conclusions", "claims that materially change scientific interpretation"],
+      "review_required": true,
+      "reviewers": ["code_auditor", "math_auditor", "scientific_auditor", "red_team"],
+      "requires_human_decision": true,
+      "notes": "Full review, explicit evidence package, and a recorded human decision in DECISIONS.md before the claim's status can be anything other than PLAUSIBLE/UNRESOLVED."
+    }
+  },
+
+  "claim_statuses": ["ESTABLISHED", "SUPPORTED", "PLAUSIBLE", "UNRESOLVED", "REFUTED", "UNKNOWN", "STALE"],
+  "claim_status_notes": {
+    "ESTABLISHED": "Requires a recorded human decision (DECISIONS.md) citing empirical evidence. Never set by reviewer consensus alone.",
+    "SUPPORTED": "Empirical evidence exists and is consistent with the claim; not yet elevated to ESTABLISHED by human decision, or scope is narrower than the full claim.",
+    "PLAUSIBLE": "Consistent with static/mathematical/logical reasoning; no disqualifying objection; empirical confirmation absent or partial.",
+    "UNRESOLVED": "Open objections or missing evidence prevent any stronger status.",
+    "REFUTED": "Evidence (executed experiment, or a CONFIRMED red-team objection) contradicts the claim.",
+    "UNKNOWN": "Default for historical/legacy claims that have not yet been reviewed at all.",
+    "STALE": "A prior status (often ESTABLISHED/SUPPORTED/PLAUSIBLE) was earned against a dependency that has since changed (fingerprint mismatch, see review_freshness below). The claim keeps its prior status label alongside this flag but must be re-validated before being relied on. Set procedurally, not automatically -- see PROTOCOL.md Review freshness section."
+  },
+
+  "bundle_identity_policy": {
+    "rule": "Every reviewer dispatched against the same review package must receive a byte-identical evidence bundle -- pasted or referenced verbatim, never re-authored, condensed, or role-tailored per reviewer. The bundle states facts; it must not contain orchestrator-written interpretive annotations pointing at which facts matter or what conclusion they suggest. Any pattern the orchestrator notices while building the bundle is reported to the human before dispatch, not embedded in the reviewer-facing document.",
+    "rationale": "Added 2026-08-20 after Pilot 1's postmortem (POSTMORTEMS/PILOT1_POSTMORTEM.md) found both violations occurred silently in Pilot 1: four non-identical, role-tailored bundles, each carrying an orchestrator-authored note naming the pilot's two headline findings before any reviewer looked at anything. The resulting 4/4 reviewer 'agreement' was real agreement on severity, not independent discovery of the underlying facts -- and this was not caught until a dedicated adversarial postmortem looked for it.",
+    "enforcement": "ADVISORY -- nothing mechanically prevents a future orchestrator from re-authoring bundles per role again; see PROTOCOL.md sec5.0."
+  },
+
+  "evidence_field_policy": {
+    "rule": "A claim's 'Supporting evidence' field must be either a ledger citation (investigation_id + event_id) or an experiment citation (E-xxx + artifact pointer), never free-text assertion alone.",
+    "rationale": "Closes the 'evidence laundering' failure mode -- a SPECULATIVE_CONCERN or an unexecuted claim being informally worded to read like evidence in the claim record. Free text may still accompany the citation as explanation, but the citation itself must resolve to something checkable (a ledger event or a human-provided artifact)."
+  },
+
+  "disposition_manifest_policy": {
+    "rule": "Every hypothesis ID and experiment ID returned by get_investigation_state for the source investigation must receive exactly one disposition in a DISPOSITION_MANIFEST.md: INCLUDED (appears in the canonical evidence bundle) or EXCLUDED (does not appear, with a stated reason). Coverage is required, not inclusion -- a scoped bundle that excludes irrelevant material is fine; a silent omission with no disposition at all is not.",
+    "check_procedure": "Deterministic, no LLM judgment required: diff the ID list from get_investigation_state against the manifest's ID list (must match exactly, no extras, no missing) and confirm every EXCLUDED row has non-empty reason text. A plain text-search/diff can perform this check.",
+    "verification_status": "MECHANICALLY-VERIFIABLE, not ENFORCED in this framework's own glossary sense (config.json enforcement_status_glossary) -- the check itself is deterministic and needs no LLM judgment to evaluate, but nothing technically prevents an orchestrator from skipping the check and dispatching reviewers anyway. There is no PreToolUse hook on Agent/codex dispatch calls, and none is being added (consistent with this framework's standing 'do not add hooks' constraint). Running the check before dispatch remains a procedural discipline, same category as bundle_identity_policy.",
+    "rationale": "Added 2026-08-20, refining the postmortem's original 'every ID must appear' proposal after review: literal 100% inclusion would collapse the useful distinction between a scoped bundle and an incomplete one, and would increase reviewer anchoring/noise for large investigations. Disposition-with-reason preserves scope while making omission visible and challengeable instead of silent."
+  },
+
+  "reconstruction_scope_declaration_policy": {
+    "rule": "Every canonical evidence bundle states, near its top: which source file(s)/line-ranges were examined, which ledger objects were in scope, and a pointer to the DISPOSITION_MANIFEST.md for what was excluded and why. A reviewer must never have to guess whether an excerpt is the whole record.",
+    "enforcement": "ADVISORY -- a reconstruction-step habit, not mechanically checked.",
+    "rationale": "Pilot 2's Code Auditor correctly treated its 40-line excerpt as bounded only because the bundle said so explicitly ('lines 115-154'); generalizing that disclosure habit is cheap and already validated in practice."
+  },
+
+  "raw_output_retrieval_policy": {
+    "rule": "For every INCLUDED experiment with executed:true, the reconstruction step must locate that experiment's RESULT_RECORDED event in the investigation's raw JSONL (scientific-debug/data/<investigation_id>.jsonl, read via Read/Grep -- a static file read, not execution) and include its captured stdout/stderr (or the ledger's own existing truncation, matching execute_experiment's 8000/4000-char convention) in the bundle. If no RESULT_RECORDED event exists for an included experiment, the bundle states 'captured output not retrievable' explicitly rather than omitting the field silently.",
+    "enforcement": "ADVISORY -- a reconstruction-step requirement, not mechanically checked (though a coverage-style check analogous to disposition_manifest_policy -- 'does every included executed:true experiment ID have accompanying output text nearby' -- is a plausible future tightening, not built now).",
+    "rationale": "Closes Pilot 2's strongest finding (F1, independently found by 4/4 reviewers): get_investigation_state's derived summary omits captured stdout/stderr entirely; only exit_code and command text were available to any Pilot 1 or Pilot 2 reviewer. Retroactively affects Pilot 1's bundle too."
+  },
+
+  "external_context_policy": {
+    "rule": "Canonical evidence (the investigation's own record) and permitted external context (general, public, non-case-specific reference material -- language/library documentation, published standards, textbook results) are two distinct categories, never merged. External context is: uniformly permitted to every reviewer role, not incidental to one; must be explicitly cited (source name/URL) wherever used; and must never be silently folded into what looks like canonical evidence. Case-specific or project-specific external material (e.g. a GitHub issue about this exact bug, an internal wiki page) is not permitted under this policy -- that would recreate the evidence-selection problem bundle-identity discipline exists to prevent, just via a side channel.",
+    "enforcement": "ADVISORY -- reviewer prompts state the permission and the citation requirement; nothing mechanically prevents a reviewer from looking up case-specific material or from citing it improperly.",
+    "rationale": "Added 2026-08-20 after Pilot 2's Code Auditor used external MATLAB documentation to support a STATIC_FACT finding (a legitimate use -- static_fact_policy already requires a citable source, and general documentation is exactly that) while no other reviewer was offered the same option. Makes the permission uniform and explicit instead of an accidental asymmetry."
+  },
+
+  "static_fact_policy": {
+    "rule": "An objection or finding classified STATIC_FACT must name a citable source (textbook, paper, spec, standard, or a static/logical proof shown inline) -- an assertion with no source is not STATIC_FACT, reclassify it as LOGICAL_ARGUMENT (if the reasoning is shown) or SPECULATIVE_CONCERN (if it is not).",
+    "rationale": "Closes the 'reviewer hallucination presented as fact' failure mode. This is still advisory (nothing checks the cited source is real), but it forecloses the cheapest version of the failure -- an unsourced assertion no longer qualifies for the strongest classification by construction of the template."
+  },
+
+  "risk_escalation": {
+    "rule": "Before finalizing a risk level for an R1+ change, check whether any changed file/method appears in any claim's 'Depends on' list in this project's CLAIMS.md. If it does, treat the change as at least R3 for gating purposes (full review + human decision) regardless of what its own change-magnitude would otherwise suggest, and mark the dependent claim(s)/review(s) STALE pending re-validation -- do not mark them REFUTED, the change alone is not evidence the claim is wrong.",
+    "rationale": "R0-R4 as originally defined classifies by how much code/method is changing (axis A: implementation/change magnitude). It does not separately account for how much a change could affect an already-relied-on scientific conclusion (axis B: scientific consequence) -- a one-line WOLA-normalization edit can be axis-A-small and axis-B-huge if an ESTABLISHED claim already depends on that exact normalization. Rather than building a full second 0-4 scale (5x5 matrix, disproportionate for this MVP), this single dependency-triggered escalation rule closes the specific gap the task named: a consequential methodological change bypassing an appropriate decision gate merely because it is locally classified R2.",
+    "mechanism": "Dependency fingerprints are SHA-256 file hashes computed with PowerShell 'Get-FileHash -Algorithm SHA256' (or an equivalent non-Python/non-MATLAB tool) at review time and re-checked the same way later -- see review_freshness.",
+    "scope_note": "This rule only fires for changes to files already listed as a dependency of an existing claim. It never fires for Research Mode exploration that has not touched any file a claim depends on -- brainstorming and novel-formulation work are unaffected (see PROTOCOL.md section 3 and 10)."
+  },
+
+  "review_freshness": {
+    "fingerprint_tool": "PowerShell Get-FileHash -Algorithm SHA256 (or a functionally equivalent non-Python/non-MATLAB static hashing tool). Never MATLAB/Python.",
+    "recorded_at": "Review package creation time (PACKAGE.md 'Reviewed target fingerprint(s)' field) and claim creation/update time (CLAIMS.md 'Depends on' field).",
+    "invalidation_check": "Re-hash the same file(s); compare to the recorded fingerprint. Mismatch = potentially stale. This is a static content-identity check, not a semantic diff -- it will also flag comment-only or formatting-only edits (false positive risk, accepted deliberately: over-flagging is safe, under-flagging is the actual danger this exists to prevent).",
+    "on_mismatch": "Set the claim's/review's validity to STALE (claim keeps its substantive status alongside the flag). Do not treat mismatch alone as REFUTED. Re-validation (a fresh, possibly abbreviated, review pass) clears STALE.",
+    "trigger_timing": "Checked procedurally -- when resuming a project session (PROTOCOL.md 'Continuing investigations'), and whenever an R1+ change is about to touch a file with a recorded fingerprint (see risk_escalation). Not checked by any automatic hook; this remains advisory/procedural per the MVP constraint against adding new hooks."
+  },
+
+  "violation_classes": {
+    "harmless_infrastructure_mistake": {
+      "definition": "The prohibited action touched no scientific code, data, claim, hypothesis, or evidence record, and produced or claimed no scientific result -- e.g. running a trivial non-scientific Python one-liner to validate this framework's own JSON/markdown.",
+      "response": "Record in VIOLATIONS.md (or the global VIOLATIONS_LOG.md if not tied to a specific project). No rollback. Continue."
+    },
+    "potentially_contaminating_scientific_action": {
+      "definition": "A scientific file, claim, or hypothesis was read, touched, or reasoned about in a way that could have influenced an in-progress claim/hypothesis outside the normal review workflow -- without necessarily executing anything prohibited.",
+      "response": "Record in VIOLATIONS.md. Identify every claim/hypothesis/review touched or reasoned about since. Downgrade those to UNRESOLVED (never leave them at a stronger status) until a human confirms no contamination. Unaffected work may continue."
+    },
+    "prohibited_experiment_executed": {
+      "definition": "MATLAB, Python, or any scientific/numerical/data-processing command actually ran.",
+      "response": "Record in VIOLATIONS.md as CRITICAL. Any output from that execution must not enter CLAIMS.md/EXPERIMENTS.md as evidence; if it already did, revert that claim/experiment to its pre-execution status (UNRESOLVED / SPEC_ONLY) pending a human-authorized real re-run. Surface to the user in the same turn -- do not silently continue Validation Mode work until acknowledged (mirrors the ledger's acknowledge_escalation: a logged, visible checkpoint, not a silent one)."
+    },
+    "fabricated_or_claimed_evidence": {
+      "definition": "A result was recorded as if it were real (executed/human-provided) without actual execution -- the single worst failure mode this framework exists to prevent.",
+      "response": "Record in VIOLATIONS.md as CRITICAL. Immediately revert the specific claim/experiment record to its pre-fabrication status (not 'pending' -- reverted outright). Mark the fabricated content retracted/struck-through rather than deleted (append-only in spirit, matching the ledger's own append-only ethos -- correct forward, don't erase). Tell the user directly in the same turn, not batched into a later report."
+    }
+  },
+
+  "enforcement_status_glossary": {
+    "ENFORCED": "A technical mechanism prevents the forbidden action; verified to actually behave this way in this environment.",
+    "MECHANICALLY-VERIFIABLE": "Added 2026-08-20 (disposition_manifest_policy). The check itself is deterministic and needs no LLM judgment to evaluate (a plain diff/text-search suffices) -- but nothing technically prevents skipping the check itself. Distinct from ENFORCED (nothing prevents the underlying omission from happening) and distinct from ADVISORY (the check, once run, is not a judgment call -- it has one correct answer). Use this label only for checks that are actually reducible to deterministic text/data comparison, not for anything requiring interpretation.",
+    "ADVISORY": "The agent is instructed to behave correctly, but nothing technically prevents violation.",
+    "HUMAN-CONTROLLED": "The framework requires the human to make the decision; no agent (reviewer or primary) can substitute for it.",
+    "UNIMPLEMENTED": "The desired capability does not currently exist in this environment/version."
+  },
+
+  "hypothesis_statuses": ["OPEN", "SUPPORTED", "REFUTED", "SUPERSEDED", "NON_TESTABLE"],
+
+  "objection_classifications": [
+    "STATIC_FACT",
+    "MATHEMATICAL_DERIVATION",
+    "LOGICAL_ARGUMENT",
+    "EMPIRICAL_HYPOTHESIS",
+    "SPECULATIVE_CONCERN",
+    "NON_TESTABLE_CONCERN"
+  ],
+
+  "objection_statuses": ["OPEN", "FALSIFIED", "CONFIRMED", "BOUNDED", "NON-TESTABLE"],
+  "objection_status_notes": {
+    "OPEN": "Still requires investigation. Default at creation.",
+    "FALSIFIED": "Evidence demonstrates the objection does not apply.",
+    "CONFIRMED": "Evidence demonstrates the problem exists.",
+    "BOUNDED": "The problem exists but has been quantified and shown to be within an acceptable, documented range.",
+    "NON-TESTABLE": "No feasible experiment currently distinguishes the alternatives. Preserved as a documented limitation, not treated as blocking."
+  },
+
+  "reviewer_roles": ["code_auditor", "math_auditor", "scientific_auditor", "red_team"],
+
+  "reviewer_independence": {
+    "initial_pass": "Each reviewer receives the same underlying evidence package but not other reviewers' write-ups.",
+    "synthesis_pass": "Only after all independent reviews are recorded may a synthesis compare them. Agreement across reviewers is never treated as proof.",
+    "isolation_categories_investigated_2026-08-19": {
+      "A_prompt_level": "ADVISORY. Reviewer prompts (templates/REVIEWER_PROMPT_*.md) instruct 'do not modify code.' Nothing technical backs this on its own.",
+      "B_tool_level": "PARTIAL / ENFORCED-FOR-A-SUBSET -- EMPIRICALLY CONFIRMED 2026-08-19 (scientific-debug-ledger investigation review-layer-enforcement-claims-2026-08-19; H1/H2/H3), not merely read from agent-type definitions. A real 'Explore'-dispatched subagent was instructed to attempt three writes; results independently re-verified by re-reading the target files afterward, not taken on the subagent's word: (H1) it reported no Write/Edit tool existed in its tool set at all -- true, but the ledger's subprocess-only experiment model can't capture an Agent-dispatch transcript as 'executed' evidence, so H1 stayed formally UNTESTED in the ledger despite being real, first-hand-observed evidence -- a named ledger scope limitation. (H2, SUPPORTED, evidence event d13da492-31b2-4261-8266-ea20f97204c6) Bash IS available to it and a Bash-issued write to an unprotected scratch file succeeded -- no available agent type blocks Bash/PowerShell/mcp__filesystem__* while retaining the read/search tools a reviewer needs. The only agent type in this environment with zero write-capable tools ('claude-code-guide': Glob/Grep/Read/WebFetch/WebSearch) is scoped to a different task (Claude Code product questions) and unsuitable as a general reviewer. CONDITIONAL STRONGER MECHANISM (H3, SUPPORTED, evidence event 2d8d95e9-3e6d-43e2-ac89-e91a6aee3fc9): the same subagent's Bash-issued write to a file registered as protected_paths on an open investigation with deliberately-unmet gate preconditions was denied verbatim by the real hook_gate.py ('blocked write to ...: no hypothesis registered yet'), and the target file was independently confirmed unchanged. This reuses existing infrastructure -- no new hook was added.",
+      "C_process_context_isolation": "ENFORCED at the mechanism level (a new Agent tool call starts with no shared conversation/context by construction -- confirmed from this environment's Agent tool contract), ADVISORY at the orchestrator-discipline level (nothing stops the dispatching agent from manually pasting one reviewer's conclusions into another's prompt; don't).",
+      "D_model_level_independence": "PARTIALLY AVAILABLE. The Agent tool's optional 'model' parameter can dispatch different roles on different Claude model generations (real but same-vendor diversity). A genuinely different vendor/model (e.g. the 'codex' MCP tool) is available only if configured for the specific project -- not guaranteed present.",
+      "recommended_dispatch": "Explore/Plan agent type (blocks Edit/Write/NotebookEdit) + an open ledger investigation with protected_paths covering the reviewed files (blocks the remaining write channels) + vary the 'model' parameter and/or use codex where available for at least the Red Team role."
+    }
+  },
+
+  "red_team_vendor_options": {
+    "_comment": "Added 2026-08-22. See PROTOCOL.md §5.2 for full narrative. Structured summary only -- PROTOCOL.md is authoritative on wording.",
+    "codex": {
+      "status": "primary",
+      "dispatch_shape": "native MCP tool call (mcp__codex__codex), sandbox: read-only",
+      "known_defects": "quota-limited; no known refusal nondeterminism"
+    },
+    "agy": {
+      "status": "secondary / documented fallback, conditional",
+      "vendor": "Google -- Antigravity CLI, successor to Gemini CLI (retired 2026-06-18)",
+      "dispatch_shape": "CLI subprocess via Bash/PowerShell (agy -p \"<prompt>\" --model gemini-3.5-flash --mode plan), NOT an MCP tool -- agy has no mcp-server mode",
+      "required_model": "gemini-3.5-flash must be pinned explicitly -- default model gemini-3.1-pro had a literal free-tier quota limit of 0 on the tested key, not merely exhausted",
+      "write_block_guarantee": "PARTIAL, empirically confirmed 2026-08-22, conditional on exact configuration -- see verified_safe_configuration. --mode plan alone is NOT a write-block guarantee: a live test proved a write succeeded under --mode plan when combined with --dangerously-skip-permissions.",
+      "verified_safe_configuration": "permissions.allow containing ONLY exact literal per-file paths (wildcard/glob paths like 'dir\\*' silently match nothing -- confirmed from agy's own debug log), no write_file grant, --dangerously-skip-permissions never passed. Under this exact config, a live dispatch: read succeeded, a requested write (attempted via write_file and separately via a shell command tool) was denied both times with the target file independently confirmed unchanged, and a separate run under the identical config still produced a full real review.",
+      "known_defects": "Reliability: the identical prompt under the identical verified-safe configuration produced a complete review on one run and a flat safety-filter refusal on the immediately following run, no configuration difference between them -- unresolved, roughly coin-flip in samples run so far. This is separate from, and not fixed by, the write-block or quota findings above.",
+      "policy": "May be dispatched only under verified_safe_configuration. A refusal must never be recorded as a clean 'no findings' pass -- retry once; if it refuses twice, record that fact explicitly rather than silently omitting agy from the dispatch record.",
+      "content_quality_note": "One fixture, one trial each, NOT a benchmark: agy/gemini-3.5-flash found 6/6 seeded bugs in a seeded-bug test file (including one Codex missed); Codex found 4-5/6 but surfaced legitimate findings outside the seeded set. Promising, not conclusive."
+    }
+  },
+
+  "execute_experiment_policy": {
+    "allowed": "Non-scientific verification of the review infrastructure itself (e.g. validating a markdown/JSON file, running a linter, checking a checksum).",
+    "forbidden": "MATLAB, Python, any scientific/numerical/data-processing command, any experiment tied to an E-xxx spec. Those are executed by the human; Claude records the pasted-back result as evidence, citing the human as the source.",
+    "rationale": "Hard operating constraint for this framework. Also keeps the ledger's execute_experiment tool from becoming a second channel for exactly the kind of execution this review layer is not allowed to perform."
+  }
+}

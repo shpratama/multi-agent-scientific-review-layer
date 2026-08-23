@@ -1,0 +1,12 @@
+# Real, per-engagement investigation data -- never shared.
+# This repo is the reusable framework only (PROTOCOL.md, config.json,
+# templates/, self-review/validation docs). See PROTOCOL.md's
+# "Deployment note" for why these are excluded rather than redacted.
+/projects/
+/PROJECTS.md
+/POSTMORTEMS/
+/ANALYSIS/validation-2026-08-20/
+
+# OS/editor noise
+.DS_Store
+Thumbs.db
