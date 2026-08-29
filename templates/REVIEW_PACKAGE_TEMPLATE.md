@@ -15,6 +15,17 @@
   file/method appear in an existing claim's `Depends on` list? <yes -> C-xxx,
   escalate to R3+ and mark that claim STALE / no>
 
+## Enforcement-floor check (PROTOCOL.md §0.1)
+
+- [ ] Ran the check: `grep -l "hook_gate.py" ~/.claude/settings.json
+  ~/.claude/settings.local.json ./.claude/settings.json
+  ./.claude/settings.local.json` (or the PowerShell equivalent in §0.1) —
+  found in at least one file.
+- If **not found**, this review proceeds `ADVISORY-ONLY` — say so
+  explicitly here, don't silently continue as if §22's `ENFORCED` rows
+  apply: <state which reviewer-isolation guarantees are therefore not
+  actually protected on this machine>
+
 ## Reviewed target fingerprint(s) (PROTOCOL.md §10.1)
 
 <file path> @ sha256:`<hash>` (computed with `PowerShell Get-FileHash

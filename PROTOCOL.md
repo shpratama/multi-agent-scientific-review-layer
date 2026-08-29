@@ -92,6 +92,81 @@ the human produces (a file, a pasted console log with a timestamp); this
 layer's `EXPERIMENTS/E-xxx.md` records point at that artifact rather than
 re-deriving it.
 
+### 0.1 Enforcement-floor check (added 2026-08-29)
+
+§22's only unconditionally `ENFORCED` row — the `PreToolUse` gate blocking
+a reviewer's writes to `protected_paths` — is entirely imported from
+`scientific-debug`. This repo does not ship that system and does not
+check for it. On a machine where it isn't installed, or isn't registered,
+every `ENFORCED` claim in §22 silently degrades to `ADVISORY` with no
+warning to the Primary Agent or the human.
+
+**Fires at three points, not one** (the first version of this section
+only had the third — caught during review, before this ever reached a
+public commit): §16 step 0
+(new investigation, before initializing `projects/<project_key>/`), §17
+step 0 (continuing investigation, before reading anything else), and
+before dispatching any review (§8, via `REVIEW_PACKAGE_TEMPLATE.md`'s
+checklist). The first two matter specifically because Research Mode work
+can run an entire session without ever creating a review package — a
+check that only fired at dispatch would show nothing for that whole
+class of session, silently.
+
+**What this still doesn't reach:** a session doing genuinely R0-only
+work in a project that correctly never gets a `projects/<project_key>/`
+entry at all (§16.1) never touches §16 or §17 either — there is currently
+no point inside this repo's own control where the check would fire for
+that case. Closing that fully needs the check to live in `SKILL.md`
+itself (the actual session-start file), which this repo doesn't ship
+(it's per-device — see `README.md`). Arguably this residual gap matters
+less than it sounds: `ENFORCED` claims were never claimed to apply to R0
+work in the first place (§6 — R0 gets no review, by design), so there's
+no protection silently missing there, only the banner. Noted rather than
+silently accepted — revisit if a `SKILL.md` template is ever added to
+this repo (a separate, already-discussed, not-yet-authorized item).
+
+**Search command**, run at each of the three points above: the gate's
+actual hook registration —
+
+```bash
+grep -l "hook_gate.py" "$HOME/.claude/settings.json" "$HOME/.claude/settings.local.json" ./.claude/settings.json ./.claude/settings.local.json 2>/dev/null
+```
+```powershell
+Select-String -Path "$env:USERPROFILE\.claude\settings.json","$env:USERPROFILE\.claude\settings.local.json",".claude\settings.json",".claude\settings.local.json" -Pattern "hook_gate.py" -ErrorAction SilentlyContinue
+```
+
+**What this check actually proves, stated honestly** (an external design
+review flagged this precisely — see `ANALYSIS/EXTERNAL_DESIGN_REVIEW_2026-08-29.md`
+finding #11): a match
+confirms the hook is registered *somewhere* in a settings file. It does
+**not** confirm the hook is currently active, that its script is
+up to date, that it's reachable (the referenced Python interpreter/script
+path still exists), or that its `matcher` actually covers the paths in
+play for this specific review. A passing check is weaker evidence than
+§0.1's banner text alone might imply — treat it as "the dependency hasn't
+been obviously skipped," not as "the gate is confirmed working for this
+review."
+
+If this finds nothing in any of those files, state plainly and loudly to
+the user, before proceeding:
+
+> ⚠ **No `scientific-debug` PreToolUse hook registration found. This
+> session is running in ADVISORY-ONLY mode — none of §22's `ENFORCED`
+> rows are actually enforced on this machine.** Reviewer tool-isolation,
+> `protected_paths` write-blocking, and every other claim in this
+> document that depends on that gate are documentation, not protection,
+> until `scientific-debug` is installed and its hook is registered.
+
+This is a real checklist item in `REVIEW_PACKAGE_TEMPLATE.md`'s own
+"Enforcement-floor check" section (right after risk classification), not
+just prose here — a review package cannot be filled out without
+confronting it.
+
+Category: **`MECHANICALLY-VERIFIABLE`** (§22) — the check itself is a
+deterministic string search, no judgment call — but nothing forces it to
+actually run before a session proceeds; it depends on the template being
+followed, same as everything else not covered by the gate itself.
+
 ## 1. Core principle
 
 Agents (Claude Code and the reviewer roles below) generate hypotheses,
@@ -687,6 +762,10 @@ When a Claude Code session starts in a scientific project with no
 
 ## 16. New investigations
 
+0. Run the enforcement-floor check (§0.1) before anything else below. If
+   it fails, surface the `ADVISORY-ONLY` banner now — do not wait until a
+   review package is created, since Research Mode work in this project
+   may never reach one.
 1. Initialize `projects/<project_key>/` if it doesn't exist (STATE.md,
    CLAIMS.md, HYPOTHESES.md, DECISIONS.md, REVIEWS/, EXPERIMENTS/ — copy from
    `templates/`).
@@ -727,6 +806,10 @@ starts making a scientific claim about it, which is not expected.
 At the start of a session working in a project that already has a
 `projects/<project_key>/` directory:
 
+0. Run the enforcement-floor check (§0.1) before anything else below —
+   same reasoning as §16 step 0: this session may do nothing but
+   Research Mode work and never create a review package, and the banner
+   still needs to fire if so.
 1. Read this PROTOCOL.md (or trust the cached summary in `SKILL.md`).
 2. Read `STATE.md` — current mode, current stage, active ledger
    `investigation_id`s.
@@ -845,6 +928,7 @@ Every meaningful control this framework describes, honestly labeled:
 
 | Control | Category | Why |
 |---|---|---|
+| `scientific-debug` enforcement-floor presence is checked (§0.1) | **MECHANICALLY-VERIFIABLE** | Deterministic grep, no judgment call. Fires at §16/§17 session-start steps and before dispatch — covers Research Mode work that never reaches a package. Does not fire for R0-only sessions where no project is ever initialized (§16.1) — no `SKILL.md` in this repo to anchor that case; not currently claimed to matter since R0 has no `ENFORCED` claims to protect anyway |
 | Reviewers can't run `Edit`/`Write`/`NotebookEdit` | **ENFORCED** (partial — see §5) | `Explore`/`Plan` agent types genuinely lack these tools |
 | Reviewers can't write via `Bash`/`PowerShell`/`mcp__filesystem__*` | **ADVISORY** by default; **ENFORCED** on the specific reviewed files *if* `protected_paths` was set on an open ledger investigation before dispatch | Depends on the Primary Agent actually doing the ledger step (§5) |
 | Reviewer doesn't see other reviewers' conclusions | **ENFORCED** (mechanism) / **ADVISORY** (orchestrator discipline) | Fresh `Agent` calls share no context by construction; nothing stops manually pasting content across prompts |
