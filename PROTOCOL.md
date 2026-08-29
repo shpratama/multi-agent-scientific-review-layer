@@ -392,7 +392,15 @@ key, not a real project claim), one trial each — `agy`/`gemini-3.5-flash`
 found all 6 seeded bugs including one Codex missed (an off-by-one loop
 bound); Codex found 4–5 of 6 but surfaced legitimate findings outside the
 seeded set that `agy` didn't. This is a genuinely promising data point,
-**not a benchmark** — n=1, single prompt, single fixture.
+**not a benchmark** — n=1, single prompt, single fixture. By this
+framework's own evidentiary bar (an `EMPIRICAL_HYPOTHESIS` needs more
+than one trial before being treated as more than provisional — §9), any
+comparative reading of this ("`agy` performs comparably to Codex") is
+`PLAUSIBLE` at most, explicitly not `SUPPORTED` — cite this as "a
+promising result exists," not as a settled comparison between the two.
+The `policy` field/paragraph below is unaffected and needs no such
+caveat — it's a procedural hedge (retry once on refusal), not a
+comparative claim about which vendor performs better.
 
 **Policy going forward:** Codex remains the default Red-Team vendor —
 deterministic, MCP-native, no known refusal nondeterminism. `agy` may be
