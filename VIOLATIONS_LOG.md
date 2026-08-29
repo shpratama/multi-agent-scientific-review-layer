@@ -47,3 +47,39 @@ enforces. Nothing here would have technically stopped a repeat of V-001 —
 see PROTOCOL.md §22, `execute_experiment_policy` is the only genuinely
 enforced boundary in this area, and it governs the ledger's tool, not
 arbitrary shell commands.
+
+## Note: commit-history attribution error (not a constraint violation)
+
+Not a `violation_classes` entry — no scientific code, claim, or
+constraint was touched. Recorded here anyway because this file is
+this framework's existing home for "things that went wrong while
+building it," and a silent fix would violate the same correct-forward,
+don't-erase ethos this log itself exists to model.
+
+- **Date:** 2026-08-30
+- **What happened:** commits 26e173b through 54a95cc were built as one
+  continuous editing session, then split into five commits after the
+  fact by staging diff hunks per logical item. `PROTOCOL.md` §0.1 was
+  edited incrementally across that session — once in the original item,
+  once during a later triage pass — and both edits landed in the same
+  contiguous region of the file. `git diff` merges physically adjacent
+  changes into one hunk regardless of when they were made, so the whole
+  region was attributed to the earlier commit (`26e173b`), carrying a
+  later addition backward with it: a paragraph citing
+  `ANALYSIS/EXTERNAL_DESIGN_REVIEW_2026-08-29.md` finding #11, a file
+  that commit doesn't create — that happens two commits later, in
+  `15bf467`.
+- **Found by:** an independent review pass from a separate Claude Code
+  session/device, checking the pushed commits after the fact — not
+  self-caught.
+- **Effect:** `git show 26e173b -- PROTOCOL.md` in isolation cites a
+  file that doesn't exist yet at that point in history. The live
+  document at `HEAD` was never wrong — this only affects intermediate
+  commits, e.g. `git bisect` or anyone reading one commit at a time.
+- **Response:** fix-forward, not history rewrite. `main`'s branch
+  protection (`allow_force_pushes: false`) makes a rebase-based fix
+  actually unavailable, not just undesirable — a PR can only add
+  commits on top of existing history, not replace it. Corrected by this
+  same commit (the one adding this entry), via a branch + PR per that
+  same protection — see `git log` on this file for the exact hash.
+- **Resolved:** yes, as of this entry's own commit.
