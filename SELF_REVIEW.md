@@ -53,6 +53,14 @@ change status over exhaustive lists).
 consequential claim" is a judgment call, made by the same agent motivated to
 avoid overhead. No external check on that judgment exists in this MVP.
 
+**Corroboration, 2026-08-29:** a cold external design review (`codex`,
+no prior-phase context — `ANALYSIS/EXTERNAL_DESIGN_REVIEW_2026-08-29.md`,
+finding #4) independently cited this same risk. Same caveat as noted
+alongside finding #2's corroboration: Codex read this file directly per
+its instructions, so this is confirmation the risk is real and visible,
+not evidence of independent rediscovery. Still unmitigated, no change in
+status.
+
 ## 4. Could objections become endless?
 
 **Risk:** real. Unlike the ledger's `pivot_threshold` (a hard, configured,

@@ -969,7 +969,7 @@ the first instance; more may exist).
 4. Empirical claims require empirical evidence.
 5. Disagreement should produce a discriminating experiment where possible.
 6. Research Mode preserves creativity.
-7. Validation Mode enforces evidence.
+7. Validation Mode requires evidence.
 8. Red-teaming is adversarial but bounded (§11).
 9. Old work is not automatically validated merely because it is old (§15).
 10. Human-run experiments remain the empirical authority (§12).

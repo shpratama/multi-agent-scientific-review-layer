@@ -282,3 +282,38 @@ machinery narrowly:
 
 Nothing above has been implemented. This is the analysis to react to,
 adjust, or reject before any of it becomes a framework change.
+
+## Revisit, 2026-08-29
+
+Recommendation 5's deferral condition ("reserve... for R3/R4 claims
+specifically") was checked against the one real R4 case that exists
+(`REVIEWS/R4-sjsso-mc-v2-benchmark-2026-08-22`) as part of a discussion
+pass reacting to an outside reviewer's pushback. Finding: that review did
+have a genuine evidentiary weakness (benchmark numbers existed only as
+human-pasted session output, n=1 subject, n=1 seed, no permanent
+artifact) — but it was caught twice over without any Package Auditor: the
+orchestrator self-disclosed it in `PACKAGE.md` before dispatch, and all
+three non-code reviewer roles raised it independently anyway
+(`SYNTHESIS.md`'s H3). The specific failure mode this role/check exists
+to catch — a bundle problem invisible to reviewers because they only see
+what the orchestrator hands them — did not actually occur in the one
+real case checked.
+
+**Decision (human-made, 2026-08-29):** defer the interim length/parity
+check discussed alongside the full role, matching the existing deferral
+of the full role itself. Not because the underlying need is proven
+absent — one clean case doesn't prove that — but because it wasn't
+demonstrated present either. Revisit if a future case shows the
+disclosure-and-convergent-catch pattern failing (a bundle problem that
+reviewers miss and the orchestrator doesn't disclose).
+
+**Corroboration, 2026-08-29:** a cold external design review (`codex`,
+no prior-phase context — `ANALYSIS/EXTERNAL_DESIGN_REVIEW_2026-08-29.md`,
+finding #2) independently cited this exact gap. Worth noting precisely
+what kind of evidence this is: Codex was instructed to read `PROTOCOL.md`
+directly, which already states this as `UNIMPLEMENTED` in §22 — so this
+is "an outside reviewer correctly found and re-cited an already-named
+gap," not "an outside reviewer surfaced an undocumented one." Real
+corroboration that the gap is genuine and visible, not evidence of
+independent discovery. Doesn't change the 2026-08-29 revisit decision
+above.

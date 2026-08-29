@@ -26,7 +26,8 @@
       "examples": ["reduces bias", "preserves neural signal", "outperforms method X", "is more robust"],
       "review_required": true,
       "reviewers": ["code_auditor", "math_auditor", "scientific_auditor", "red_team"],
-      "notes": "Full review including red team. Empirical portions of the claim require empirical evidence (E-xxx experiment executed by the human), not reviewer agreement."
+      "requires_human_decision": true,
+      "notes": "Full review including red team. Empirical portions of the claim require empirical evidence (E-xxx experiment executed by the human), not reviewer agreement. requires_human_decision added 2026-08-29 -- PROTOCOL.md §14 already said 'for R3/R4' together; this flag was previously R4-only, an inconsistency an external design review caught."
     },
     "R4": {
       "name": "Major Scientific Conclusion",
