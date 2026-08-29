@@ -652,6 +652,45 @@ file and use `max + 1`, zero-padded to 3 digits. IDs are per-project and
 per-prefix, and are never reused, including for refuted/closed/superseded
 records.
 
+**Lock file around the allocation sequence (added 2026-08-29).** The
+read-max+1-write sequence above is a real race between two sessions
+touching the same `project_key` at once — confirmed as a live risk in
+this environment (a near-miss with two concurrent sessions on the same
+project actually happened during this framework's own development,
+independent of this specific ID mechanism). Given the single-user,
+multi-device scope this framework assumes (README.md), that race is
+between a person's own sessions/devices, not between different people —
+but it's still real and worth closing cheaply:
+
+1. Before listing existing IDs to compute `max + 1`, check for
+   `projects/<project_key>/.ids.lock`.
+2. If it exists, **do not proceed and do not silently retry-loop** —
+   surface a clear conflict to the user: *"Another session may be
+   allocating an ID in this project (lock file present). If you know no
+   other session is active, this is likely a stale lock left by an
+   interrupted session — confirm with the user before removing it,
+   rather than removing it automatically."*
+3. If absent, create it (its content doesn't matter — presence is the
+   signal; a timestamp inside helps a human judge staleness later), do
+   the read/allocate/write sequence, then remove it.
+
+**What this is, stated honestly, same standard as everywhere else in
+this document:** a real mutex for any session that follows this
+protocol — it actually prevents the race, stronger than a passive
+warning. It is **not** a technical block against a session that skips
+the lock-check entirely; nothing enforces that a session looks for the
+lock before writing. Category: closer to the ledger's own real
+concurrency handling in spirit, but unlike the ledger's `PreToolUse`
+gate, nothing hooks this — it depends on the protocol being followed,
+same as almost everything else not covered by that gate (§22).
+
+*Not built this pass, flagged as an optional future refinement:*
+routing all ID allocation through one small helper (a script, or a
+single documented procedure) rather than three manual steps a session
+has to remember correctly every time would reduce the chance of the
+lock step itself being forgotten — deliberately left out here rather
+than expanding this pass's scope.
+
 ### 10.1 Review freshness and staleness (Phase F)
 
 A review is a statement about a claim's dependencies *as they were at review
