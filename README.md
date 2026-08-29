@@ -34,7 +34,14 @@ and is never pushed. Pulling framework updates never touches these.
 1. Clone this repo somewhere stable (any path — nothing in `PROTOCOL.md`
    hardcodes a location).
 2. `cp PROJECTS.template.md PROJECTS.md` to get a local, empty project
-   index.
+   index. **Scope, stated plainly:** a `project_key` is assumed to be
+   worked on by one person at a time, even across that person's own
+   multiple devices/sessions — `PROTOCOL.md` §10's lock file handles the
+   ID-allocation race that creates for a single person switching
+   devices. There is **no** reconciliation mechanism for genuinely
+   concurrent multi-person editing of the same project. If that ever
+   becomes a real need, it requires a different design, not an
+   extension of this one.
 3. Point the global skill entry at this clone: create/edit
    `~/.claude/skills/scientific-review/SKILL.md` (this file lives outside
    the repo, per-device) so its path references point here. There is no
