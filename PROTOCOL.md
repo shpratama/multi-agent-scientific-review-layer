@@ -135,6 +135,14 @@ grep -l "hook_gate.py" "$HOME/.claude/settings.json" "$HOME/.claude/settings.loc
 Select-String -Path "$env:USERPROFILE\.claude\settings.json","$env:USERPROFILE\.claude\settings.local.json",".claude\settings.json",".claude\settings.local.json" -Pattern "hook_gate.py" -ErrorAction SilentlyContinue
 ```
 
+*Exit-code note (live-tested 2026-08-30):* the Bash form exits `1` only
+when all four files exist and none match; the common case of
+`settings.local.json` simply not existing (it's optional) produces exit
+`2` instead, since `grep` errors on a missing file even with stderr
+suppressed. Stdout is empty in both cases, so an agent reading raw
+output reaches the correct conclusion either way — this only matters if
+this check is ever scripted to branch on `$?` directly rather than read.
+
 **What this check actually proves, stated honestly** (an external design
 review flagged this precisely — see `ANALYSIS/EXTERNAL_DESIGN_REVIEW_2026-08-29.md`
 finding #11): a match
@@ -670,27 +678,42 @@ multi-device scope this framework assumes (README.md), that race is
 between a person's own sessions/devices, not between different people —
 but it's still real and worth closing cheaply:
 
-1. Before listing existing IDs to compute `max + 1`, check for
-   `projects/<project_key>/.ids.lock`.
-2. If it exists, **do not proceed and do not silently retry-loop** —
-   surface a clear conflict to the user: *"Another session may be
-   allocating an ID in this project (lock file present). If you know no
-   other session is active, this is likely a stale lock left by an
-   interrupted session — confirm with the user before removing it,
-   rather than removing it automatically."*
-3. If absent, create it (its content doesn't matter — presence is the
-   signal; a timestamp inside helps a human judge staleness later), do
-   the read/allocate/write sequence, then remove it.
+1. Attempt to **create `projects/<project_key>/.ids.lock` as a
+   directory**, using an atomic exclusive-create operation —
+   `mkdir projects/<project_key>/.ids.lock` (Bash; fails immediately,
+   non-zero exit, if it already exists) or
+   `New-Item -ItemType Directory -Path "projects/<project_key>/.ids.lock" -ErrorAction Stop`
+   (PowerShell; throws if it already exists). **Do not check for
+   existence first and create it as a separate step** — that two-step
+   sequence is not atomic and was found, by live testing (2026-08-30),
+   to let two sessions both see "absent" and both proceed under genuine
+   simultaneity. The create attempt itself is the check; its
+   success/failure is the only signal that matters.
+2. If the create fails (lock already present), **do not proceed and do
+   not silently retry-loop** — surface a clear conflict to the user:
+   *"Another session may be allocating an ID in this project (lock
+   present). If you know no other session is active, this is likely a
+   stale lock left by an interrupted session — confirm with the user
+   before removing it, rather than removing it automatically."*
+3. If the create succeeds, do the read/allocate/write sequence, then
+   remove the lock directory (`rmdir`/`Remove-Item`).
 
 **What this is, stated honestly, same standard as everywhere else in
-this document:** a real mutex for any session that follows this
-protocol — it actually prevents the race, stronger than a passive
-warning. It is **not** a technical block against a session that skips
-the lock-check entirely; nothing enforces that a session looks for the
-lock before writing. Category: closer to the ledger's own real
-concurrency handling in spirit, but unlike the ledger's `PreToolUse`
-gate, nothing hooks this — it depends on the protocol being followed,
-same as almost everything else not covered by that gate (§22).
+this document, and corrected after live testing found the first version
+of this section didn't actually hold:** a real mutex for any session
+that follows this protocol, **as long as the create step is genuinely
+atomic** — a plain "check existence, then create" sequence looks
+equivalent but isn't; it was live-tested (two simulated sessions racing
+the same check) and both sessions proceeded, exactly the failure this
+mechanism exists to prevent. `mkdir`/`New-Item -ErrorAction Stop` were
+separately tested against the same simulated race and correctly produced
+one winner, one clean backoff. This is **not** a technical block against
+a session that skips the lock-check entirely; nothing enforces that a
+session looks for the lock before writing. Category: closer to the
+ledger's own real concurrency handling in spirit, but unlike the
+ledger's `PreToolUse` gate, nothing hooks this — it depends on the
+protocol being followed, same as almost everything else not covered by
+that gate (§22).
 
 *Not built this pass, flagged as an optional future refinement:*
 routing all ID allocation through one small helper (a script, or a
