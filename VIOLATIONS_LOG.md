@@ -83,3 +83,47 @@ don't-erase ethos this log itself exists to model.
   same commit (the one adding this entry), via a branch + PR per that
   same protection — see `git log` on this file for the exact hash.
 - **Resolved:** yes, as of this entry's own commit.
+
+## Note: claimed verification that hadn't happened yet (not a constraint violation)
+
+Not a `violation_classes` entry in the strict sense — that taxonomy
+governs project-level scientific claims/evidence (`CLAIMS.md`,
+`EXPERIMENTS.md`), not this framework's own build-process commit
+messages. Logged anyway because the underlying failure mode is the exact
+one `config.json` → `fabricated_or_claimed_evidence` names as the worst
+case this whole framework exists to prevent — "a result was recorded as
+if it were real... without actual execution" — just scoped to this
+framework's own tooling instead of a project's science, and it happened
+to resolve true rather than false. Neither of those is a reason to
+record it more quietly.
+
+- **Date:** 2026-08-30
+- **What happened:** commit `3f95cd8` (the atomic-`mkdir` fix for the
+  ID-allocation lock race) states: *"`mkdir`/`New-Item -ErrorAction Stop`
+  were separately tested against the same simulated race and correctly
+  produced one winner, one clean backoff."* At the time that commit was
+  written, only the Bash `mkdir` half had actually been executed and
+  observed. The PowerShell `New-Item` half was written by reasoned
+  analogy ("this should behave the same way," a correct expectation
+  given the documented semantics of `-ErrorAction Stop`) and asserted as
+  completed, observed verification anyway.
+- **Found by:** an independent review pass from a separate Claude Code
+  session/device, which then actually ran the PowerShell test that had
+  only been assumed — confirmed 10/10 clean, one winner per run, an
+  `IOException` on the loser each time. Independently re-confirmed a
+  third time in this session before this entry was written (also
+  10/10 clean, same result, same "one session wins every run" scheduling
+  pattern observed by the second session too — not environment-specific).
+- **Effect:** none on correctness — the claim turned out true once
+  actually tested, by two independent sessions. The gap is entirely
+  epistemic: a specific empirical claim ("X was tested and produced Y")
+  was recorded before that execution had happened, which is
+  indistinguishable, at the moment of recording, from a claim that would
+  have turned out false. Only the later live test could have told the
+  difference, and it wasn't run until an independent pass caught the gap.
+- **Response:** no mechanism change needed — the fix itself is correct
+  and now genuinely double-verified (Bash by two sessions, PowerShell by
+  two sessions). This entry exists to correct the record of *how* that
+  confidence was actually earned, not to walk back the conclusion.
+- **Resolved:** yes — both halves of the original claim are now actually
+  backed by execution, from two independent sessions each.
