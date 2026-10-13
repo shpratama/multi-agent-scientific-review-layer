@@ -872,9 +872,11 @@ When a Claude Code session starts in a scientific project with no
    it fails, surface the `ADVISORY-ONLY` banner now — do not wait until a
    review package is created, since Research Mode work in this project
    may never reach one.
-1. Initialize `projects/<project_key>/` if it doesn't exist (STATE.md,
+1. Compute the `project_key` (§18) and run the identity check (§18.1)
+   first — a key match alone does not mean the directory is this project's.
+   Then initialize `projects/<project_key>/` if it doesn't exist (STATE.md,
    CLAIMS.md, HYPOTHESES.md, DECISIONS.md, REVIEWS/, EXPERIMENTS/ — copy from
-   `templates/`).
+   `templates/`), recording the absolute path in STATE.md's `project_root`.
 2. Record the research question in STATE.md.
 3. Start in Research Mode.
 4. Record important hypotheses (`H-xxx`) as they firm up — not every
@@ -910,7 +912,9 @@ starts making a scientific claim about it, which is not expected.
 ## 17. Continuing investigations
 
 At the start of a session working in a project that already has a
-`projects/<project_key>/` directory:
+`projects/<project_key>/` directory (confirm that with the §18.1 identity
+check first — a key match alone does not show the directory is *this*
+project's):
 
 0. Run the enforcement-floor check (§0.1) before anything else below —
    same reasoning as §16 step 0: this session may do nothing but
@@ -929,12 +933,99 @@ At the start of a session working in a project that already has a
 ## 18. `project_key`
 
 `project_key` = the project's absolute root path with every `\`, `/`, `:`,
-and space replaced by `-`. This is the same slugification Claude Code's own
-`~/.claude/projects/<slug>/` directories already use, so the two trees line
-up visually (e.g. a project at `D:\Foo Bar\baz` becomes `D--Foo-Bar-baz` in
-both places). No script computes this — it's a one-line deterministic
-transform, and PROJECTS.md (§19) records the mapping explicitly so it never
-needs to be recomputed from memory.
+and space replaced by `-` (e.g. `D:\Foo Bar\baz` becomes `D--Foo-Bar-baz`).
+No script computes this — it's a one-line deterministic transform, and
+PROJECTS.md (§19) records the mapping explicitly so it never needs to be
+recomputed from memory.
+
+**It is a readable label, not an identity.** The transform is lossy and
+case-preserving, so:
+
+- *Two different paths can produce one key.* `D:\Foo Bar\baz` and
+  `D:\Foo-Bar\baz` both become `D--Foo-Bar-baz`.
+- *One path can produce two keys.* On a case-insensitive filesystem
+  (Windows, default macOS) `d:\study\codes` and `D:\Study\codes` are the same
+  directory but give `d--study-codes` and `D--Study-codes`. PowerShell and Git
+  Bash both keep whatever case was typed, so this is reachable in ordinary
+  use.
+
+Either failure is silent: two projects' review state merges into one tree,
+or one project's splits into two. §18.1 is the check that catches it.
+Neither has been observed on real directories on the one machine where this
+was checked (a scan of roughly 3,700 directories found no collision under
+this rule); both were reproduced as string transforms, and the case split
+was shown to be reachable from both shells.
+
+**This is *not* Claude Code's `~/.claude/projects/<slug>/` slug, and the
+two do not reliably "line up".** An earlier version of this section said
+they were the same slugification. They are not. Observed 2026-10-13 on one
+Windows machine, comparing each of 17 directory names under
+`~/.claude/projects/` with the `cwd` recorded in the session logs inside it:
+Claude Code folds **every** non-alphanumeric character to `-` (confirmed for
+space, comma, underscore, hyphen, colon and backslash; **not tested** for
+`.` or other characters), which reproduces all 17 names. This section's rule
+reproduces only 10 of 17: it differs whenever a path contains an underscore,
+a comma, or any other non-alphanumeric outside the four characters above.
+Claude Code's rule is also the lossier of the two. So do not derive one key
+from the other and do not look for one tree by the other's name. This
+section's rule was deliberately **not** changed to match: nothing reads
+Claude Code's directory, matching would buy only a visual resemblance, and
+it would make keys lossier and rename existing state trees.
+
+### 18.1 Identity check (added 2026-10-13)
+
+Run it whenever you compute a `project_key`: at §16 before initializing
+`projects/<project_key>/`, and at §17 before treating an existing
+`projects/<project_key>/` as this project's state. **A key match is not an
+identity match.**
+
+1. **What to compare against.** If `projects/<project_key>/` exists, the
+   `project_root` recorded in its `STATE.md`. A missing or placeholder
+   `project_root` is *unknown*: surface that, do not assume a match. If the
+   directory does not exist yet, look in `PROJECTS.md` for (a) a row with the
+   same key but a different root, and (b) a row whose root equals the current
+   path ignoring case but whose key differs. Once a row exists, `PROJECTS.md`
+   is looked up by root path, not recomputed.
+2. **Normalize both paths first,** or you will get false mismatches: absolute
+   path, `/` converted to `\` (Git Bash reports `/d/Foo`, PowerShell
+   `D:\Foo` — the same directory), trailing separators stripped. Then:
+   - **exactly equal** → same project; proceed.
+   - **equal only ignoring case** → **stop and surface.** On Windows and
+     default macOS this is the same directory spelled two ways, and the
+     existing tree was created under one spelling; ask which spelling is
+     canonical. Do not create a second tree and do not rewrite the recorded
+     root. (On a case-sensitive filesystem it may genuinely be two projects;
+     that is the user's call too.)
+   - **different** → **key collision: two different projects map to this
+     key. Stop and surface both paths.** Do not read or write either state
+     tree until the user decides; the usual resolution is a manually
+     disambiguated key for one of them, recorded in `PROJECTS.md`.
+
+```powershell
+function Compare-ProjectRoot([string]$Recorded, [string]$Current) {
+    $norm = {
+        param($p)
+        $p = ($p -replace '^/([A-Za-z])(/|$)', '$1:\' -replace '/', '\').TrimEnd('\')
+        if ($p.Length -ge 2 -and $p[1] -eq ':') { $p = $p.Substring(0, 1).ToUpperInvariant() + $p.Substring(1) }  # drive-letter case is never meaningful
+        $p
+    }
+    $a = & $norm $Recorded
+    $b = & $norm $Current
+    if     ($a -ceq $b) { 'SAME' }
+    elseif ($a -ieq $b) { 'CASE-ONLY-DIFFERENCE' }
+    else                { 'DIFFERENT-PROJECT' }
+}
+```
+
+*What this does and doesn't establish.* The comparison is a deterministic
+string test (**MECHANICALLY-VERIFIABLE** once run); that it is run at all is
+**ADVISORY**, like the rest of this protocol. It cannot catch a collision
+with a project that never recorded a `project_root`, and it relies on
+`STATE.md` being accurate. The snippet is the Windows form; on Linux/macOS
+compare the strings directly (no `/d/` conversion). **Not tested:** Linux,
+macOS, and case-sensitive filesystems. Re-runnable test:
+`tests/test_project_key.ps1`, which extracts the function above from this
+file.
 
 ## 19. `PROJECTS.md`
 
@@ -1046,6 +1137,7 @@ Every meaningful control this framework describes, honestly labeled:
 | Code changes to protected scientific files require a completed ledger investigation | **ENFORCED** | This is the pre-existing `scientific-debug` `PreToolUse` gate, unmodified, reused |
 | Objection count is bounded | **UNIMPLEMENTED** | No cap exists, unlike the ledger's `pivot_threshold` — see `SELF_REVIEW_PHASE_F.md` §6 |
 | Non-scientific projects don't get initialized | **ADVISORY** (§16.1) | Depends on the Primary Agent's judgment call about relevance |
+| A `project_key` match is confirmed to be the same project before its state tree is reused (§18.1) | **MECHANICALLY-VERIFIABLE** (string comparison of the recorded `project_root` vs the current path) / **ADVISORY** that it is run | Nothing forces the check; cannot catch a collision with a project whose `STATE.md` never recorded `project_root`; tested on Windows only |
 | Stale reviews get flagged | **ADVISORY** (the fingerprint check itself, when performed, is deterministic — §10.1) | No hook computes fingerprints automatically |
 | Every source hypothesis/experiment ID gets a disposition (§8.1) | **MECHANICALLY-VERIFIABLE** | A plain diff against `get_investigation_state`'s ID list settles it with no judgment call — but nothing forces the diff to be run before dispatch |
 | Bundle includes captured experiment output, not just `exit_code` (§8.1) | **ADVISORY** | Reconstruction-step requirement; not checked automatically |
