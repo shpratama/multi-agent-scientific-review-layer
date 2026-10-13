@@ -1,0 +1,5 @@
+# Shell scripts must keep LF line endings on every checkout. Without this, a Windows
+# checkout with core.autocrlf=true turns tests/*.sh into CRLF and bash fails on the
+# stray \r characters. (The same class of device-to-device line-ending difference that
+# PROTOCOL.md section 10.1 handles for fingerprints.)
+*.sh text eol=lf

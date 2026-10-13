@@ -17,10 +17,11 @@
 
 ## Enforcement-floor check (PROTOCOL.md §0.1)
 
-- [ ] Ran the check: `grep -l "hook_gate.py" ~/.claude/settings.json
-  ~/.claude/settings.local.json ./.claude/settings.json
-  ./.claude/settings.local.json` (or the PowerShell equivalent in §0.1) —
-  found in at least one file.
+- [ ] Ran the check **exactly as written in §0.1**, with the project's
+  absolute root — found in at least one file. (The command lives only in
+  §0.1, in both shells; don't copy it here. An earlier copy in this
+  template was working-directory-relative and went stale when §0.1 was
+  fixed.)
 - If **not found**, this review proceeds `ADVISORY-ONLY` — say so
   explicitly here, don't silently continue as if §22's `ENFORCED` rows
   apply: <state which reviewer-isolation guarantees are therefore not

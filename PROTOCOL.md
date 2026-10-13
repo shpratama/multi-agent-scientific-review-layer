@@ -126,14 +126,50 @@ silently accepted — revisit if a `SKILL.md` template is ever added to
 this repo (a separate, already-discussed, not-yet-authorized item).
 
 **Search command**, run at each of the three points above: the gate's
-actual hook registration —
+actual hook registration. `PROJECT_ROOT` / `$ProjectRoot` is the project's
+**absolute root** — the same path §18 derives `project_key` from — not the
+shell's current directory. (The first version of this section used
+`./.claude/settings.json`, which silently misses a project-level
+registration whenever the working directory is a subfolder.)
 
 ```bash
-grep -l "hook_gate.py" "$HOME/.claude/settings.json" "$HOME/.claude/settings.local.json" ./.claude/settings.json ./.claude/settings.local.json 2>/dev/null
+grep -l "hook_gate.py" "$HOME/.claude/settings.json" "$HOME/.claude/settings.local.json" "$PROJECT_ROOT/.claude/settings.json" "$PROJECT_ROOT/.claude/settings.local.json" 2>/dev/null
 ```
 ```powershell
-Select-String -Path "$env:USERPROFILE\.claude\settings.json","$env:USERPROFILE\.claude\settings.local.json",".claude\settings.json",".claude\settings.local.json" -Pattern "hook_gate.py" -ErrorAction SilentlyContinue
+$settings = "$env:USERPROFILE\.claude\settings.json","$env:USERPROFILE\.claude\settings.local.json","$ProjectRoot\.claude\settings.json","$ProjectRoot\.claude\settings.local.json"
+$settings | Where-Object { Test-Path -LiteralPath $_ -PathType Leaf } | ForEach-Object { Select-String -LiteralPath $_ -Pattern "hook_gate.py" -List }
 ```
+
+**Do not "simplify" the PowerShell form back to a single
+`Select-String -Path a,b,c,d -ErrorAction SilentlyContinue`.** That was the
+original form, and it returned a **false negative on a correctly configured
+machine** (found 2026-10-13 by an independent audit; it had only ever been
+run in its Bash form). `Select-String -Path` raises a *statement-terminating*
+`PathNotFound` error when any listed path does not exist, during path
+resolution and before any file is searched, so `-ErrorAction` cannot
+suppress it (`SilentlyContinue`, `Ignore`, `Continue` and `Stop` all reach a
+`try/catch`) and the order of the paths does not matter. `settings.local.json`
+is optional, so on a normal machine one path is almost always absent and the
+check could never see a real registration — the `ADVISORY-ONLY` banner would
+fire on a correctly configured setup, and a banner that fires everywhere
+carries no information. The form above never hands `Select-String` a
+nonexistent path (existing files are filtered first), and uses
+`-LiteralPath` so `[` `]` in a path are not read as wildcards.
+
+**Tested form and what is *not* tested** (2026-10-13). The tests extract the
+two code blocks above from this file and run them, so this text and the
+tests cannot silently diverge: `tests/test_enforcement_floor_check.ps1` and
+`tests/test_enforcement_floor_check.sh`. Covered: registration in the user
+or project file; any one file absent; no registration with files absent or
+present; a project-level registration with the working directory in a
+subfolder; UTF-8 BOM and UTF-16LE files; a directory where a settings file
+should be; `[ ]` and spaces in the home path. Run with Windows PowerShell
+5.1 and Git for Windows' Bash (GNU grep 3.0) only. **Not tested:** PowerShell
+7 (the form should not depend on 5.1-vs-7 error differences, since it never
+passes a nonexistent path — but that is a prediction; run the `.ps1` test
+under `pwsh` to find out), and Linux/macOS grep. **Known asymmetry:** the
+PowerShell form finds a hook in a UTF-16 settings file, `grep -l` does not;
+Claude Code writes UTF-8, so this is documented, not a known failure.
 
 *Exit-code note (live-tested 2026-08-30):* the Bash form exits `1` only
 when all four files exist and none match; the common case of
