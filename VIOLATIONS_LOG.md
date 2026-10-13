@@ -127,3 +127,57 @@ record it more quietly.
   confidence was actually earned, not to walk back the conclusion.
 - **Resolved:** yes — both halves of the original claim are now actually
   backed by execution, from two independent sessions each.
+
+## Note: documented command shipped without being run (not a constraint violation)
+
+Same status as the two notes above: not a `violation_classes` entry, logged
+because this file is the home for "things that went wrong while building it".
+This one is the third of its family, which is why it is worth stating as a
+pattern and not only as an incident.
+
+- **Date:** 2026-10-13
+- **What happened:** `PROTOCOL.md` §0.1 (added 2026-08-29) gave the
+  enforcement-floor check in two shells, side by side, as if equivalent. Only
+  the Bash form was ever run; the 2026-08-30 "live-tested" note was scoped to
+  Bash and did not claim otherwise, but nothing marked the PowerShell form as
+  untested. Run for the first time, it returned **no match whenever any one
+  listed path did not exist, even though a listed file contained the
+  registration** — and one path is almost always absent, since
+  `settings.local.json` is optional. `Select-String -Path` raises a
+  statement-terminating `PathNotFound` error during path resolution, so
+  `-ErrorAction` cannot suppress it. Both forms also used working-directory-
+  relative paths for project-level settings, so a project registration was
+  missed whenever the shell was in a subfolder.
+- **Found by:** an independent claims audit run on a different device against
+  a fresh clone, then reproduced here before anything was changed. Not
+  self-caught.
+- **Effect:** on a correctly configured Windows machine the check would have
+  shown the `ADVISORY-ONLY` banner (§0.1), i.e. a warning that fires
+  everywhere and so carries no information. I have no evidence either way on
+  whether it misled a real review; the banner's conclusion on a machine with
+  no gate installed happened to be right by accident.
+- **The pattern:** this is the third logged instance of a documented step
+  getting ahead of its execution — a commit citing a file that did not exist
+  yet (`26e173b`), a "separately tested" claim for a half that had not been
+  run (`3f95cd8`), and now a command never run in one of its two shells. The
+  same audit found two nearby claims stronger than what had been exercised:
+  that `project_key` matches Claude Code's own directory slug (false for 7 of
+  17 directories on the machine checked; §18) and that the fingerprint check
+  was validated (one fixture, one machine, unchanged line endings; §10.1,
+  Phase F Test I). Each earlier response ("no mechanism change needed") was
+  fair for its own instance; three instances say per-incident fixes are not
+  enough.
+- **Response:** fix-forward (branch + PR). The new part is `tests/`: each test
+  **extracts the documented code block from `PROTOCOL.md` and runs it**, so a
+  command that does not run, or a recipe that drifts from its text, fails a
+  test. Each test was also checked against the old text or a deliberately
+  degraded recipe to confirm it can fail. **What this does not do:** nothing
+  runs these tests automatically (there is no CI), so a green run means
+  someone ran it on a named host; and PowerShell 7, Linux and macOS remain
+  unrun. A CI workflow on Windows, Linux and macOS runners (including `pwsh`)
+  would close those gaps and make an unrunnable documented command fail a PR
+  check; it was not added here because it is persistent automation the owner
+  has not asked for.
+- **Resolved:** the specific defects, yes, on the hosts tested. The pattern,
+  no — open until the tests run somewhere other than the machine that wrote
+  them.
