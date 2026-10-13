@@ -29,8 +29,9 @@
 
 ## Reviewed target fingerprint(s) (PROTOCOL.md §10.1)
 
-<file path> @ sha256:`<hash>` (computed with `PowerShell Get-FileHash
--Algorithm SHA256`, never MATLAB/Python) — repeat per file this review's
+<file path> @ `<sha256-lf:hex | sha256-raw:hex>` (computed with the
+PROTOCOL.md §10.1 function, never MATLAB/Python; `lf` by default for text,
+`raw` for binary or line-ending-sensitive files) — repeat per file this review's
 conclusions depend on. Re-hash and compare before relying on this review
 later; a mismatch means re-validate (§10.1), not "still valid."
 

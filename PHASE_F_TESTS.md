@@ -137,6 +137,16 @@ Both directions verified with real command output, not asserted. **PASS —
 this is the one mechanism in Phase F that was built and tested
 end-to-end, not just documented.**
 
+> **Scope note (added 2026-10-13, after an independent audit):** this test
+> used one fixture on one machine, edited in place, with the same line
+> endings throughout. It shows the mechanism distinguishes a changed file
+> from an unchanged one *on one machine*; it does not show the fingerprint is
+> stable across devices (a raw byte hash is not — see PROTOCOL.md §10.1,
+> "Two modes"). Its fixture lived in an ephemeral scratchpad and does not
+> re-run from this repo. The behavior it covered, plus line-ending and
+> multi-device cases, is now re-runnable in
+> `tests/test_fingerprint_normalization.ps1` / `.sh`.
+
 ## Test J — Independent reviews representable without conclusion exposure
 
 **Command:** `grep -l` across all four `REVIEWER_PROMPT_*.md` files for any

@@ -54,7 +54,16 @@ policy, closing an asymmetry where one Pilot 2 reviewer used external
 documentation others weren't offered). Deliberately **not** added yet:
 an Evidence/Package Auditor role, dual reconstruction, or typed file-vs-
 investigation dependencies — reserved as open design questions, not
-implemented without further evidence they're needed.
+implemented without further evidence they're needed. **Corrected
+2026-10-13 after an independent claims audit** (each item reproduced before
+changing anything; re-runnable tests in `tests/`): the §0.1 PowerShell
+enforcement-floor command returned a false negative on a correctly
+configured machine and both shells' project-level paths were cwd-relative
+(§0.1); §18's claim that `project_key` matches Claude Code's own slug was
+false and the key's lossiness had no check (§18, new §18.1); and §10.1
+fingerprints depended on line endings, so text files that git converts
+differently across devices flagged `STALE` with no edit made (§10.1, now
+`lf`/`raw` method-tagged fingerprints). See `VIOLATIONS_LOG.md` for the process note.
 
 ## 0. What this is (and isn't), and how it relates to `scientific-debug`
 
@@ -766,18 +775,86 @@ this is distinct from the claim being wrong.
 
 **Mechanism** (`config.json` → `review_freshness`): every claim's **Depends
 on** entry and every review package's `PACKAGE.md` record a **fingerprint**
-for each file/method they depend on — a SHA-256 hash computed with
-`PowerShell Get-FileHash -Algorithm SHA256` (never MATLAB/Python) at the
-time the claim or review was written. To check freshness, re-hash the same
-file and compare. A mismatch means the dependency changed since the
-fingerprint was recorded.
+for each file/method they depend on, written
+`sha256-<mode>:<64 lowercase hex digits>` (never MATLAB/Python), computed at
+the time the claim or review was written. To check freshness, recompute with
+the **same mode** and compare. A mismatch means the dependency changed since
+the fingerprint was recorded.
 
-This was tested end-to-end against a synthetic fixture in Phase F (see
-`PHASE_F_TESTS.md`, Test I): an unchanged file correctly reproduces the same
-hash (no false staleness), a changed file correctly produces a different
-hash. It's a content-identity check, not a semantic diff — it will also flag
-comment-only or formatting-only edits. That's accepted deliberately:
-over-flagging is safe, under-flagging is the actual danger.
+**Two modes, and why** (added 2026-10-13). The same tracked file can have
+different bytes on two devices: with git's `core.autocrlf`, a Windows
+checkout writes CRLF where a Linux/macOS checkout writes LF (on the Windows
+machine this was tested on, Git for Windows had set `core.autocrlf=true` at
+system level). A plain byte hash
+then differs between devices though nothing was edited, so every fingerprinted
+*text* dependency that git converts differently on the two devices would flag
+`STALE` — a signal that fires on every such file carries no information. Reproduced with scratch repos: one tracked file, raw SHA-256
+differs between an `autocrlf=true` checkout and an LF checkout; the
+LF-normalized hash is identical.
+
+- `lf` — hash after replacing each CR LF pair with LF (a lone CR is left
+  alone). **Default for text source files** — MATLAB, Python, R, markdown,
+  plain text, JSON/YAML config — *except* the line-ending-sensitive kinds
+  listed under `raw` below (a shell script is a script, but it is `raw`).
+- `raw` — hash of the exact bytes. Use it for binary or data files, and for
+  any file where line endings are *semantic* (shell scripts, `.bat`/`.cmd`,
+  anything with literal CR/LF inside data): normalizing would hide an edit
+  that matters — a shell script converted to CRLF stops running. **When
+  unsure, use `raw`**: a false `STALE` is the safe direction (see below).
+
+Always record **lowercase** hex. `Get-FileHash` prints upper-case and
+`sha256sum` lower-case, and records that mix the two for the same file are
+a trap. A legacy `sha256:<hash>` entry with no mode means `raw`, compared
+case-insensitively; re-record it in the new form the next time that
+dependency is re-validated.
+
+```powershell
+function Get-Fingerprint([string]$Path, [ValidateSet('lf', 'raw')][string]$Mode = 'lf') {
+    # .NET resolves relative paths against the process directory, not PowerShell's location
+    $bytes = [IO.File]::ReadAllBytes((Resolve-Path -LiteralPath $Path).ProviderPath)
+    if ($Mode -eq 'lf') {
+        $latin1 = [Text.Encoding]::GetEncoding(28591)   # 1 byte <-> 1 char, so this round trip is byte-exact
+        $bytes  = $latin1.GetBytes($latin1.GetString($bytes).Replace("`r`n", "`n"))
+    }
+    $hash = [Security.Cryptography.SHA256]::Create().ComputeHash($bytes)
+    "sha256-${Mode}:" + (($hash | ForEach-Object { $_.ToString('x2') }) -join '')
+}
+```
+```bash
+fingerprint() {   # usage: fingerprint FILE [lf|raw]   (default: lf)
+  local mode="${2:-lf}" h
+  case "$mode" in lf|raw) ;; *) echo "fingerprint: mode must be lf or raw, got: $mode" >&2; return 1 ;; esac
+  [ -f "$1" ] && [ -r "$1" ] || { echo "fingerprint: not a readable file: $1" >&2; return 1; }
+  command -v perl >/dev/null 2>&1 || { echo "fingerprint: perl is required" >&2; return 1; }
+  # pipefail inside the substitution, input via redirect: if reading fails, fail loudly instead of hashing empty input
+  if [ "$mode" = lf ]; then h="$( set -o pipefail; perl -0777 -pe 's/\r\n/\n/g' < "$1" | sha256sum )" || { echo "fingerprint: could not read: $1" >&2; return 1; }
+  else                      h="$( set -o pipefail; sha256sum < "$1" )"                                || { echo "fingerprint: could not read: $1" >&2; return 1; }
+  fi
+  echo "sha256-${mode}:${h%% *}"
+}
+```
+
+Use these two exactly. The obvious Bash one-liners are **not** equivalent:
+`sed 's/\r$//'` and `tr -d '\r'` both differ from the PowerShell form on a
+CR at end of file with no LF, and on binary data; `tr -d '\r'` also differs on
+a lone CR. On macOS, `sha256sum` is typically absent — use
+`shasum -a 256` in its place (**not tested**).
+
+**What was and wasn't tested.** Phase F Test I (see `PHASE_F_TESTS.md`)
+checked one fixture on one machine, edited in place: an unchanged file
+reproduces its hash, a changed file does not. It did **not** cover differing
+line endings. `tests/test_fingerprint_normalization.ps1` and `.sh` extract the
+two functions above from this file and check 8 fixtures (LF, CRLF, mixed, a
+lone CR, no trailing newline, a trailing CR, a UTF-8 BOM, binary) against
+digests that both shells must reproduce, plus the git multi-device scenario
+and relative-path use. Tested with Windows PowerShell 5.1 and Git for
+Windows' Bash (perl 5.38, GNU coreutils 8.32). **Not tested:** PowerShell 7,
+Linux, macOS.
+
+A fingerprint is a content-identity check, not a semantic diff — it will also
+flag comment-only or formatting-only edits (in `lf` mode, a line-ending-only
+change is deliberately *not* flagged; in `raw` mode it is). That's accepted
+deliberately: over-flagging is safe, under-flagging is the actual danger.
 
 **On mismatch:** set the claim's/review's status to `STALE` (§ in
 `config.json` → `claim_status_notes`). This does not erase or downgrade the
