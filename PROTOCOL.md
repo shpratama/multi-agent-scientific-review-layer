@@ -54,7 +54,16 @@ policy, closing an asymmetry where one Pilot 2 reviewer used external
 documentation others weren't offered). Deliberately **not** added yet:
 an Evidence/Package Auditor role, dual reconstruction, or typed file-vs-
 investigation dependencies — reserved as open design questions, not
-implemented without further evidence they're needed.
+implemented without further evidence they're needed. **Corrected
+2026-10-13 after an independent claims audit** (each item reproduced before
+changing anything; re-runnable tests in `tests/`): the §0.1 PowerShell
+enforcement-floor command returned a false negative on a correctly
+configured machine and both shells' project-level paths were cwd-relative
+(§0.1); §18's claim that `project_key` matches Claude Code's own slug was
+false and the key's lossiness had no check (§18, new §18.1); and §10.1
+fingerprints depended on line endings, so text files that git converts
+differently across devices flagged `STALE` with no edit made (§10.1, now
+`lf`/`raw` method-tagged fingerprints). See `VIOLATIONS_LOG.md` for the process note.
 
 ## 0. What this is (and isn't), and how it relates to `scientific-debug`
 
@@ -126,14 +135,50 @@ silently accepted — revisit if a `SKILL.md` template is ever added to
 this repo (a separate, already-discussed, not-yet-authorized item).
 
 **Search command**, run at each of the three points above: the gate's
-actual hook registration —
+actual hook registration. `PROJECT_ROOT` / `$ProjectRoot` is the project's
+**absolute root** — the same path §18 derives `project_key` from — not the
+shell's current directory. (The first version of this section used
+`./.claude/settings.json`, which silently misses a project-level
+registration whenever the working directory is a subfolder.)
 
 ```bash
-grep -l "hook_gate.py" "$HOME/.claude/settings.json" "$HOME/.claude/settings.local.json" ./.claude/settings.json ./.claude/settings.local.json 2>/dev/null
+grep -l "hook_gate.py" "$HOME/.claude/settings.json" "$HOME/.claude/settings.local.json" "$PROJECT_ROOT/.claude/settings.json" "$PROJECT_ROOT/.claude/settings.local.json" 2>/dev/null
 ```
 ```powershell
-Select-String -Path "$env:USERPROFILE\.claude\settings.json","$env:USERPROFILE\.claude\settings.local.json",".claude\settings.json",".claude\settings.local.json" -Pattern "hook_gate.py" -ErrorAction SilentlyContinue
+$settings = "$env:USERPROFILE\.claude\settings.json","$env:USERPROFILE\.claude\settings.local.json","$ProjectRoot\.claude\settings.json","$ProjectRoot\.claude\settings.local.json"
+$settings | Where-Object { Test-Path -LiteralPath $_ -PathType Leaf } | ForEach-Object { Select-String -LiteralPath $_ -Pattern "hook_gate.py" -List }
 ```
+
+**Do not "simplify" the PowerShell form back to a single
+`Select-String -Path a,b,c,d -ErrorAction SilentlyContinue`.** That was the
+original form, and it returned a **false negative on a correctly configured
+machine** (found 2026-10-13 by an independent audit; it had only ever been
+run in its Bash form). `Select-String -Path` raises a *statement-terminating*
+`PathNotFound` error when any listed path does not exist, during path
+resolution and before any file is searched, so `-ErrorAction` cannot
+suppress it (`SilentlyContinue`, `Ignore`, `Continue` and `Stop` all reach a
+`try/catch`) and the order of the paths does not matter. `settings.local.json`
+is optional, so on a normal machine one path is almost always absent and the
+check could never see a real registration — the `ADVISORY-ONLY` banner would
+fire on a correctly configured setup, and a banner that fires everywhere
+carries no information. The form above never hands `Select-String` a
+nonexistent path (existing files are filtered first), and uses
+`-LiteralPath` so `[` `]` in a path are not read as wildcards.
+
+**Tested form and what is *not* tested** (2026-10-13). The tests extract the
+two code blocks above from this file and run them, so this text and the
+tests cannot silently diverge: `tests/test_enforcement_floor_check.ps1` and
+`tests/test_enforcement_floor_check.sh`. Covered: registration in the user
+or project file; any one file absent; no registration with files absent or
+present; a project-level registration with the working directory in a
+subfolder; UTF-8 BOM and UTF-16LE files; a directory where a settings file
+should be; `[ ]` and spaces in the home path. Run with Windows PowerShell
+5.1 and Git for Windows' Bash (GNU grep 3.0) only. **Not tested:** PowerShell
+7 (the form should not depend on 5.1-vs-7 error differences, since it never
+passes a nonexistent path — but that is a prediction; run the `.ps1` test
+under `pwsh` to find out), and Linux/macOS grep. **Known asymmetry:** the
+PowerShell form finds a hook in a UTF-16 settings file, `grep -l` does not;
+Claude Code writes UTF-8, so this is documented, not a known failure.
 
 *Exit-code note (live-tested 2026-08-30):* the Bash form exits `1` only
 when all four files exist and none match; the common case of
@@ -730,18 +775,86 @@ this is distinct from the claim being wrong.
 
 **Mechanism** (`config.json` → `review_freshness`): every claim's **Depends
 on** entry and every review package's `PACKAGE.md` record a **fingerprint**
-for each file/method they depend on — a SHA-256 hash computed with
-`PowerShell Get-FileHash -Algorithm SHA256` (never MATLAB/Python) at the
-time the claim or review was written. To check freshness, re-hash the same
-file and compare. A mismatch means the dependency changed since the
-fingerprint was recorded.
+for each file/method they depend on, written
+`sha256-<mode>:<64 lowercase hex digits>` (never MATLAB/Python), computed at
+the time the claim or review was written. To check freshness, recompute with
+the **same mode** and compare. A mismatch means the dependency changed since
+the fingerprint was recorded.
 
-This was tested end-to-end against a synthetic fixture in Phase F (see
-`PHASE_F_TESTS.md`, Test I): an unchanged file correctly reproduces the same
-hash (no false staleness), a changed file correctly produces a different
-hash. It's a content-identity check, not a semantic diff — it will also flag
-comment-only or formatting-only edits. That's accepted deliberately:
-over-flagging is safe, under-flagging is the actual danger.
+**Two modes, and why** (added 2026-10-13). The same tracked file can have
+different bytes on two devices: with git's `core.autocrlf`, a Windows
+checkout writes CRLF where a Linux/macOS checkout writes LF (on the Windows
+machine this was tested on, Git for Windows had set `core.autocrlf=true` at
+system level). A plain byte hash
+then differs between devices though nothing was edited, so every fingerprinted
+*text* dependency that git converts differently on the two devices would flag
+`STALE` — a signal that fires on every such file carries no information. Reproduced with scratch repos: one tracked file, raw SHA-256
+differs between an `autocrlf=true` checkout and an LF checkout; the
+LF-normalized hash is identical.
+
+- `lf` — hash after replacing each CR LF pair with LF (a lone CR is left
+  alone). **Default for text source files** — MATLAB, Python, R, markdown,
+  plain text, JSON/YAML config — *except* the line-ending-sensitive kinds
+  listed under `raw` below (a shell script is a script, but it is `raw`).
+- `raw` — hash of the exact bytes. Use it for binary or data files, and for
+  any file where line endings are *semantic* (shell scripts, `.bat`/`.cmd`,
+  anything with literal CR/LF inside data): normalizing would hide an edit
+  that matters — a shell script converted to CRLF stops running. **When
+  unsure, use `raw`**: a false `STALE` is the safe direction (see below).
+
+Always record **lowercase** hex. `Get-FileHash` prints upper-case and
+`sha256sum` lower-case, and records that mix the two for the same file are
+a trap. A legacy `sha256:<hash>` entry with no mode means `raw`, compared
+case-insensitively; re-record it in the new form the next time that
+dependency is re-validated.
+
+```powershell
+function Get-Fingerprint([string]$Path, [ValidateSet('lf', 'raw')][string]$Mode = 'lf') {
+    # .NET resolves relative paths against the process directory, not PowerShell's location
+    $bytes = [IO.File]::ReadAllBytes((Resolve-Path -LiteralPath $Path).ProviderPath)
+    if ($Mode -eq 'lf') {
+        $latin1 = [Text.Encoding]::GetEncoding(28591)   # 1 byte <-> 1 char, so this round trip is byte-exact
+        $bytes  = $latin1.GetBytes($latin1.GetString($bytes).Replace("`r`n", "`n"))
+    }
+    $hash = [Security.Cryptography.SHA256]::Create().ComputeHash($bytes)
+    "sha256-${Mode}:" + (($hash | ForEach-Object { $_.ToString('x2') }) -join '')
+}
+```
+```bash
+fingerprint() {   # usage: fingerprint FILE [lf|raw]   (default: lf)
+  local mode="${2:-lf}" h
+  case "$mode" in lf|raw) ;; *) echo "fingerprint: mode must be lf or raw, got: $mode" >&2; return 1 ;; esac
+  [ -f "$1" ] && [ -r "$1" ] || { echo "fingerprint: not a readable file: $1" >&2; return 1; }
+  command -v perl >/dev/null 2>&1 || { echo "fingerprint: perl is required" >&2; return 1; }
+  # pipefail inside the substitution, input via redirect: if reading fails, fail loudly instead of hashing empty input
+  if [ "$mode" = lf ]; then h="$( set -o pipefail; perl -0777 -pe 's/\r\n/\n/g' < "$1" | sha256sum )" || { echo "fingerprint: could not read: $1" >&2; return 1; }
+  else                      h="$( set -o pipefail; sha256sum < "$1" )"                                || { echo "fingerprint: could not read: $1" >&2; return 1; }
+  fi
+  echo "sha256-${mode}:${h%% *}"
+}
+```
+
+Use these two exactly. The obvious Bash one-liners are **not** equivalent:
+`sed 's/\r$//'` and `tr -d '\r'` both differ from the PowerShell form on a
+CR at end of file with no LF, and on binary data; `tr -d '\r'` also differs on
+a lone CR. On macOS, `sha256sum` is typically absent — use
+`shasum -a 256` in its place (**not tested**).
+
+**What was and wasn't tested.** Phase F Test I (see `PHASE_F_TESTS.md`)
+checked one fixture on one machine, edited in place: an unchanged file
+reproduces its hash, a changed file does not. It did **not** cover differing
+line endings. `tests/test_fingerprint_normalization.ps1` and `.sh` extract the
+two functions above from this file and check 8 fixtures (LF, CRLF, mixed, a
+lone CR, no trailing newline, a trailing CR, a UTF-8 BOM, binary) against
+digests that both shells must reproduce, plus the git multi-device scenario
+and relative-path use. Tested with Windows PowerShell 5.1 and Git for
+Windows' Bash (perl 5.38, GNU coreutils 8.32). **Not tested:** PowerShell 7,
+Linux, macOS.
+
+A fingerprint is a content-identity check, not a semantic diff — it will also
+flag comment-only or formatting-only edits (in `lf` mode, a line-ending-only
+change is deliberately *not* flagged; in `raw` mode it is). That's accepted
+deliberately: over-flagging is safe, under-flagging is the actual danger.
 
 **On mismatch:** set the claim's/review's status to `STALE` (§ in
 `config.json` → `claim_status_notes`). This does not erase or downgrade the
@@ -836,9 +949,11 @@ When a Claude Code session starts in a scientific project with no
    it fails, surface the `ADVISORY-ONLY` banner now — do not wait until a
    review package is created, since Research Mode work in this project
    may never reach one.
-1. Initialize `projects/<project_key>/` if it doesn't exist (STATE.md,
+1. Compute the `project_key` (§18) and run the identity check (§18.1)
+   first — a key match alone does not mean the directory is this project's.
+   Then initialize `projects/<project_key>/` if it doesn't exist (STATE.md,
    CLAIMS.md, HYPOTHESES.md, DECISIONS.md, REVIEWS/, EXPERIMENTS/ — copy from
-   `templates/`).
+   `templates/`), recording the absolute path in STATE.md's `project_root`.
 2. Record the research question in STATE.md.
 3. Start in Research Mode.
 4. Record important hypotheses (`H-xxx`) as they firm up — not every
@@ -874,7 +989,9 @@ starts making a scientific claim about it, which is not expected.
 ## 17. Continuing investigations
 
 At the start of a session working in a project that already has a
-`projects/<project_key>/` directory:
+`projects/<project_key>/` directory (confirm that with the §18.1 identity
+check first — a key match alone does not show the directory is *this*
+project's):
 
 0. Run the enforcement-floor check (§0.1) before anything else below —
    same reasoning as §16 step 0: this session may do nothing but
@@ -893,12 +1010,99 @@ At the start of a session working in a project that already has a
 ## 18. `project_key`
 
 `project_key` = the project's absolute root path with every `\`, `/`, `:`,
-and space replaced by `-`. This is the same slugification Claude Code's own
-`~/.claude/projects/<slug>/` directories already use, so the two trees line
-up visually (e.g. a project at `D:\Foo Bar\baz` becomes `D--Foo-Bar-baz` in
-both places). No script computes this — it's a one-line deterministic
-transform, and PROJECTS.md (§19) records the mapping explicitly so it never
-needs to be recomputed from memory.
+and space replaced by `-` (e.g. `D:\Foo Bar\baz` becomes `D--Foo-Bar-baz`).
+No script computes this — it's a one-line deterministic transform, and
+PROJECTS.md (§19) records the mapping explicitly so it never needs to be
+recomputed from memory.
+
+**It is a readable label, not an identity.** The transform is lossy and
+case-preserving, so:
+
+- *Two different paths can produce one key.* `D:\Foo Bar\baz` and
+  `D:\Foo-Bar\baz` both become `D--Foo-Bar-baz`.
+- *One path can produce two keys.* On a case-insensitive filesystem
+  (Windows, default macOS) `d:\study\codes` and `D:\Study\codes` are the same
+  directory but give `d--study-codes` and `D--Study-codes`. PowerShell and Git
+  Bash both keep whatever case was typed, so this is reachable in ordinary
+  use.
+
+Either failure is silent: two projects' review state merges into one tree,
+or one project's splits into two. §18.1 is the check that catches it.
+Neither has been observed on real directories on the one machine where this
+was checked (a scan of roughly 3,700 directories found no collision under
+this rule); both were reproduced as string transforms, and the case split
+was shown to be reachable from both shells.
+
+**This is *not* Claude Code's `~/.claude/projects/<slug>/` slug, and the
+two do not reliably "line up".** An earlier version of this section said
+they were the same slugification. They are not. Observed 2026-10-13 on one
+Windows machine, comparing each of 17 directory names under
+`~/.claude/projects/` with the `cwd` recorded in the session logs inside it:
+Claude Code folds **every** non-alphanumeric character to `-` (confirmed for
+space, comma, underscore, hyphen, colon and backslash; **not tested** for
+`.` or other characters), which reproduces all 17 names. This section's rule
+reproduces only 10 of 17: it differs whenever a path contains an underscore,
+a comma, or any other non-alphanumeric outside the four characters above.
+Claude Code's rule is also the lossier of the two. So do not derive one key
+from the other and do not look for one tree by the other's name. This
+section's rule was deliberately **not** changed to match: nothing reads
+Claude Code's directory, matching would buy only a visual resemblance, and
+it would make keys lossier and rename existing state trees.
+
+### 18.1 Identity check (added 2026-10-13)
+
+Run it whenever you compute a `project_key`: at §16 before initializing
+`projects/<project_key>/`, and at §17 before treating an existing
+`projects/<project_key>/` as this project's state. **A key match is not an
+identity match.**
+
+1. **What to compare against.** If `projects/<project_key>/` exists, the
+   `project_root` recorded in its `STATE.md`. A missing or placeholder
+   `project_root` is *unknown*: surface that, do not assume a match. If the
+   directory does not exist yet, look in `PROJECTS.md` for (a) a row with the
+   same key but a different root, and (b) a row whose root equals the current
+   path ignoring case but whose key differs. Once a row exists, `PROJECTS.md`
+   is looked up by root path, not recomputed.
+2. **Normalize both paths first,** or you will get false mismatches: absolute
+   path, `/` converted to `\` (Git Bash reports `/d/Foo`, PowerShell
+   `D:\Foo` — the same directory), trailing separators stripped. Then:
+   - **exactly equal** → same project; proceed.
+   - **equal only ignoring case** → **stop and surface.** On Windows and
+     default macOS this is the same directory spelled two ways, and the
+     existing tree was created under one spelling; ask which spelling is
+     canonical. Do not create a second tree and do not rewrite the recorded
+     root. (On a case-sensitive filesystem it may genuinely be two projects;
+     that is the user's call too.)
+   - **different** → **key collision: two different projects map to this
+     key. Stop and surface both paths.** Do not read or write either state
+     tree until the user decides; the usual resolution is a manually
+     disambiguated key for one of them, recorded in `PROJECTS.md`.
+
+```powershell
+function Compare-ProjectRoot([string]$Recorded, [string]$Current) {
+    $norm = {
+        param($p)
+        $p = ($p -replace '^/([A-Za-z])(/|$)', '$1:\' -replace '/', '\').TrimEnd('\')
+        if ($p.Length -ge 2 -and $p[1] -eq ':') { $p = $p.Substring(0, 1).ToUpperInvariant() + $p.Substring(1) }  # drive-letter case is never meaningful
+        $p
+    }
+    $a = & $norm $Recorded
+    $b = & $norm $Current
+    if     ($a -ceq $b) { 'SAME' }
+    elseif ($a -ieq $b) { 'CASE-ONLY-DIFFERENCE' }
+    else                { 'DIFFERENT-PROJECT' }
+}
+```
+
+*What this does and doesn't establish.* The comparison is a deterministic
+string test (**MECHANICALLY-VERIFIABLE** once run); that it is run at all is
+**ADVISORY**, like the rest of this protocol. It cannot catch a collision
+with a project that never recorded a `project_root`, and it relies on
+`STATE.md` being accurate. The snippet is the Windows form; on Linux/macOS
+compare the strings directly (no `/d/` conversion). **Not tested:** Linux,
+macOS, and case-sensitive filesystems. Re-runnable test:
+`tests/test_project_key.ps1`, which extracts the function above from this
+file.
 
 ## 19. `PROJECTS.md`
 
@@ -1010,6 +1214,7 @@ Every meaningful control this framework describes, honestly labeled:
 | Code changes to protected scientific files require a completed ledger investigation | **ENFORCED** | This is the pre-existing `scientific-debug` `PreToolUse` gate, unmodified, reused |
 | Objection count is bounded | **UNIMPLEMENTED** | No cap exists, unlike the ledger's `pivot_threshold` — see `SELF_REVIEW_PHASE_F.md` §6 |
 | Non-scientific projects don't get initialized | **ADVISORY** (§16.1) | Depends on the Primary Agent's judgment call about relevance |
+| A `project_key` match is confirmed to be the same project before its state tree is reused (§18.1) | **MECHANICALLY-VERIFIABLE** (string comparison of the recorded `project_root` vs the current path) / **ADVISORY** that it is run | Nothing forces the check; cannot catch a collision with a project whose `STATE.md` never recorded `project_root`; tested on Windows only |
 | Stale reviews get flagged | **ADVISORY** (the fingerprint check itself, when performed, is deterministic — §10.1) | No hook computes fingerprints automatically |
 | Every source hypothesis/experiment ID gets a disposition (§8.1) | **MECHANICALLY-VERIFIABLE** | A plain diff against `get_investigation_state`'s ID list settles it with no judgment call — but nothing forces the diff to be run before dispatch |
 | Bundle includes captured experiment output, not just `exit_code` (§8.1) | **ADVISORY** | Reconstruction-step requirement; not checked automatically |

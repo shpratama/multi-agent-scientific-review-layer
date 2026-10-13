@@ -20,7 +20,8 @@ a review package) / `new` (arose after this framework was in use).
 - **Context:** <where/why this claim arose>
 - **Assumptions:** <list>
 - **Depends on:** <file/method this claim's validity rests on> @
-  sha256:`<hash from PowerShell Get-FileHash -Algorithm SHA256>` (repeat per
+  `<sha256-lf:hex | sha256-raw:hex>` (from the PROTOCOL.md §10.1 function;
+  `lf` by default for text, `raw` for binary or line-ending-sensitive files) (repeat per
   dependency; leave "none recorded" only if the claim genuinely has no code
   dependency, e.g. a pure literature claim — see PROTOCOL.md §6.1, §10.1.
   This field is what lets a later methodological change automatically

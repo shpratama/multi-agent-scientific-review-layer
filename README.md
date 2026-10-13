@@ -59,6 +59,27 @@ and is never pushed. Pulling framework updates never touches these.
    `agy` (Antigravity CLI, secondary — read §5.2 fully before using it,
    the safe configuration is specific and non-obvious).
 
+## Tests
+
+[`tests/`](tests/) holds re-runnable checks for the protocol's executable
+claims (commands, recipes). Each test **extracts the documented code block
+from `PROTOCOL.md` and runs that**, so the text and the test cannot drift
+apart, and each uses fake home/project directories under the system temp
+directory — none of them touch a real `~/.claude`.
+
+```
+powershell -NoProfile -ExecutionPolicy Bypass -File tests\run_all.ps1   # Windows PowerShell 5.1
+pwsh -NoProfile -File tests/run_all.ps1                                  # PowerShell 7
+bash tests/test_enforcement_floor_check.sh                               # Bash-only
+```
+
+`run_all.ps1` exits `2` (not `0`) if it could not find a Bash to run the
+`.sh` tests, so a missing Bash is never reported as green; pass `-SkipBash`
+to acknowledge it on purpose. Nothing runs these automatically (there is no
+CI), so a green run means a person ran it on a host they can name. `PROTOCOL.md` states, next to each
+command, which hosts it has actually been run on and which it has not
+(PowerShell 7 and Linux/macOS are, as of this writing, not).
+
 ## Keeping it updated
 
 `git pull` on any device/clone. Framework changes (protocol edits, new

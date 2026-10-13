@@ -23,8 +23,8 @@ read (say when, and whether it was re-verified unchanged).
 
 ## File fingerprint(s), if any file dependency exists
 
-`<path>` @ sha256:`<hash>` (from `PowerShell Get-FileHash`, file
-read-only, never modified) — repeat per dependency.
+`<path>` @ `<sha256-lf:hex | sha256-raw:hex>` (from the PROTOCOL.md §10.1
+function, file read-only, never modified) — repeat per dependency.
 
 ## Source file excerpt(s), if any
 

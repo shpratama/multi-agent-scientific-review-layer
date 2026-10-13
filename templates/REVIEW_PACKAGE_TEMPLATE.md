@@ -17,10 +17,11 @@
 
 ## Enforcement-floor check (PROTOCOL.md §0.1)
 
-- [ ] Ran the check: `grep -l "hook_gate.py" ~/.claude/settings.json
-  ~/.claude/settings.local.json ./.claude/settings.json
-  ./.claude/settings.local.json` (or the PowerShell equivalent in §0.1) —
-  found in at least one file.
+- [ ] Ran the check **exactly as written in §0.1**, with the project's
+  absolute root — found in at least one file. (The command lives only in
+  §0.1, in both shells; don't copy it here. An earlier copy in this
+  template was working-directory-relative and went stale when §0.1 was
+  fixed.)
 - If **not found**, this review proceeds `ADVISORY-ONLY` — say so
   explicitly here, don't silently continue as if §22's `ENFORCED` rows
   apply: <state which reviewer-isolation guarantees are therefore not
@@ -28,8 +29,9 @@
 
 ## Reviewed target fingerprint(s) (PROTOCOL.md §10.1)
 
-<file path> @ sha256:`<hash>` (computed with `PowerShell Get-FileHash
--Algorithm SHA256`, never MATLAB/Python) — repeat per file this review's
+<file path> @ `<sha256-lf:hex | sha256-raw:hex>` (computed with the
+PROTOCOL.md §10.1 function, never MATLAB/Python; `lf` by default for text,
+`raw` for binary or line-ending-sensitive files) — repeat per file this review's
 conclusions depend on. Re-hash and compare before relying on this review
 later; a mismatch means re-validate (§10.1), not "still valid."
 
