@@ -55,7 +55,9 @@ and is never pushed. Pulling framework updates never touches these.
    protection is `ADVISORY` rather than `ENFORCED` — see `PROTOCOL.md` §5
    and §22 for exactly what that distinction means in practice.
 5. Optional, for cross-vendor Red-Team review (`PROTOCOL.md` §5.2):
-   register `codex` as an MCP server (primary) and/or install/configure
+   install the Codex CLI and sign in (primary; dispatched as `codex exec`,
+   no MCP registration needed — see `templates/REVIEWER_PROMPT_RED_TEAM.md`)
+   and/or install/configure
    `agy` (Antigravity CLI, secondary — read §5.2 fully before using it,
    the safe configuration is specific and non-obvious).
 
