@@ -26,15 +26,30 @@ outside the canonical bundle, on top of already being a different model.
 different vendor matters most — prefer `codex` or `agy` over a same-vendor
 `model`-parameter swap when either is available for this project.
 
-- **`codex` (primary):** dispatch as the native `mcp__codex__codex` tool
-  call, `sandbox: "read-only"`. Paste the bundle text (below the divider,
-  everything from "You are the Red-Team Auditor" onward, filled in) as
-  `prompt`.
+- **`codex` (primary):** dispatch as a separate noninteractive process
+  (`Bash`/`PowerShell`), not the `mcp__codex__codex` tool. (Changed
+  2026-11-16: the MCP route hit `model_not_found` — Codex's own config pinned
+  a model the ChatGPT login doesn't support. Cause was Codex's config, not
+  the MCP route, but `codex exec` gives clean exit codes and a captured
+  final message. The same day, a tiny read-only check through the MCP tool
+  also responded normally — so this is a choice of dispatch shape, not a
+  workaround for a route that is still broken.) Save the filled-in bundle text (below the divider,
+  everything from "You are the Red-Team Auditor" onward) to a file, then:
+  `codex exec --sandbox read-only --skip-git-repo-check --ephemeral -o <out.md> - < <prompt.md> 2> <err.txt>`
+  - Never pass `-m`/`--model`: let Codex use its own configured login and
+    default model.
+  - Success requires **both** exit code 0 **and** a non-empty `<out.md>`.
+    Return `<out.md>`'s content as the Red-Team result. On a nonzero exit or
+    empty/missing `<out.md>`, report the failure with the tail of `<err.txt>`
+    (never print auth/token values) — do not record it as "no findings" and
+    do not substitute another model while calling the Codex pass done.
+  - The reviewed files must be readable from `--cd <dir>` / the cwd; the
+    read-only sandbox blocks Codex writes (`-o` is written by the CLI itself).
 - **`agy` / Antigravity CLI (secondary, conditional — only under this exact
   configuration):**
-  - Dispatch shape is different from `codex`: `agy` has no MCP-server mode.
-    Invoke it as a CLI subprocess (`Bash`/`PowerShell`), not a tool call —
-    note this dispatch shape explicitly in `PACKAGE.md`.
+  - Dispatch shape: like `codex` (since 2026-11-16), `agy` is a CLI
+    subprocess (`Bash`/`PowerShell`), not a tool call — it never had an
+    MCP-server mode. Record the exact command that was run in `PACKAGE.md`.
   - Pin the model explicitly: `--model gemini-3.5-flash` (the default
     `gemini-3.1-pro` had zero free-tier quota on the tested key — not
     exhausted, never allocated).

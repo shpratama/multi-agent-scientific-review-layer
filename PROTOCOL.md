@@ -388,13 +388,22 @@ which was retired 2026-06-18) is a viable second vendor. Investigated the
 same way §5's B_tool_level claim was — dispatched and observed, not read
 from vendor docs and trusted.
 
-**Structural difference from Codex:** `agy` has no MCP-server mode (`agy
-mcp` only lets it *consume* other MCP servers, not expose itself as one).
-It is invoked as a CLI subprocess via `Bash`/`PowerShell`
-(`agy -p "<prompt>" --model gemini-3.5-flash --mode plan`), not as a native
-`mcp__agy__*` tool call the way `codex` is. This is a real difference in
-dispatch shape, not just a naming detail — document which shape was used
-in any `PACKAGE.md` dispatch record that includes `agy`.
+**Dispatch shape (updated 2026-11-16):** both Red-Team vendors are now
+dispatched as noninteractive CLI subprocesses via `Bash`/`PowerShell`, not
+as MCP tool calls. `agy` never had an MCP-server mode (`agy mcp` only lets
+it *consume* other MCP servers, not expose itself as one) and is invoked as
+`agy -p "<prompt>" --model gemini-3.5-flash --mode plan`. `codex` was
+changed on 2026-11-16 from the `mcp__codex__codex` tool to
+`codex exec --sandbox read-only --skip-git-repo-check --ephemeral -o <out.md> - < <prompt.md>`
+(exact command, success criteria, and the reason for the change:
+`templates/REVIEWER_PROMPT_RED_TEAM.md`; it was run once with a harmless
+prompt before this edit — exit 0, non-empty output, sandbox reported
+`read-only` — and a same-day check through the old MCP tool also still
+responded, so this is a dispatch-shape choice, not a workaround for a
+broken route). This section previously said `agy` differed from `codex` by
+being a CLI subprocess rather than a native tool call; that difference no
+longer exists. Record the exact command that was run in any `PACKAGE.md`
+dispatch record.
 
 **Model pinning is mandatory.** The default model (`gemini-3.1-pro`) had a
 literal `limit: 0` free-tier quota on the tested key — not "exhausted,"
@@ -456,7 +465,8 @@ caveat — it's a procedural hedge (retry once on refusal), not a
 comparative claim about which vendor performs better.
 
 **Policy going forward:** Codex remains the default Red-Team vendor —
-deterministic, MCP-native, no known refusal nondeterminism. `agy` may be
+deterministic, dispatched via `codex exec` (see above), no known refusal
+nondeterminism. `agy` may be
 used as a **documented secondary/fallback** Red-Team route, only under the
 exact-literal-path configuration above, and **a refusal must never be
 recorded as a clean "no findings" pass** — retry once before treating the
@@ -513,8 +523,8 @@ the terminology from §22:
 - **D. Model-level independence** (different underlying model) — **PARTIALLY
   AVAILABLE**. The `Agent` tool's `model` parameter can vary the Claude
   generation per role (real, same-vendor diversity). A genuinely different
-  vendor is available if `codex` is configured for the project (primary,
-  MCP-native, no known reliability defect) or, as a documented secondary/
+  vendor is available if `codex` is installed and signed in (primary,
+  dispatched via `codex exec`, no known reliability defect) or, as a documented secondary/
   fallback under specific conditions, `agy`/Antigravity CLI — see §5.2 for
   what's actually verified about each.
 

@@ -96,7 +96,7 @@ issue about this exact bug, etc.) is never permitted.
 | code_auditor | fresh subagent / codex / other | | `code_auditor.md` |
 | math_auditor | | | `math_auditor.md` |
 | scientific_auditor | | | `scientific_auditor.md` |
-| red_team | codex (primary) / agy via CLI subprocess (secondary, PROTOCOL.md §5.2) / fresh subagent | | `red_team.md` |
+| red_team | `codex exec` (primary, CLI subprocess) / `agy -p` (secondary, CLI subprocess, PROTOCOL.md §5.2) / fresh subagent | | `red_team.md` |
 
 If `red_team` was dispatched via `agy`: note here whether it answered on
 the first attempt or needed the one permitted retry, and if it refused
